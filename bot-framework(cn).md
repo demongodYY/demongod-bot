@@ -68,11 +68,127 @@ var bot = new builder.UniversalBot(connector, [
 
 ![Manage conversation flow with waterfall](https://docs.microsoft.com/en-us/bot-framework/media/bot-builder-nodejs-dialog-manage-conversation/waterfall-results.png)
 
-
-
 #### **用多个瀑布流来创建会话**
 
 ​	你可以按照你的机器人的需求，运用多个瀑布流来自定义一个会话结构。举个例子，你可以用一个瀑布流来管理会话流程，然后添加一个瀑布流来收集用户的信息。每个瀑布流都是封装在对话里，并且可以通过`session.beginDialog`函数来调用。
+
+​	下面的代码示例展示了如何在一个会话里运用多个瀑布流。在`greetings`对话中的瀑布流管理会话的进程，而在`askName`对话中的瀑布流来收集用户的信息。
+
+```javascript
+bot.dialog('greetings', [
+    function (session) {
+        session.beginDialog('askName');
+    },
+    function (session, results) {
+        session.endDialog('Hello %s!', results.response);
+    }
+]);
+bot.dialog('askName', [
+    function (session) {
+        builder.Prompts.text(session, 'Hi! What is your name?');
+    },
+    function (session, results) {
+        session.endDialogWithResult(results);
+    }
+]);
+```
+
+#### **进行瀑布流**
+
+​	一个瀑布流中的步骤序列是由一个函数数组来定义的。瀑布流中的第一个函数可以接受对话传过来的参数。瀑布流中每一个函数都可以用`next`函数来执行下一步，而不用提示用户进行输入。
+
+​	下面的代码片段展示了如何使用对话中的`next`函数来引导用户提供信息以完成其配置文件。在瀑布流中的每一步，机器人提示用户输入一部分信息（如果需要），并且用户（如果有）的回复会在下一步中处理。在`ensureProfile`对话中的最后一步会结束这个对话，并返回完整的配置信息给用于给用户发送信息的上层对话。
+
+```javascript
+// This bot ensures user's profile is up to date.
+var bot = new builder.UniversalBot(connector, [
+    function (session) {
+        session.beginDialog('ensureProfile', session.userData.profile);
+    },
+    function (session, results) {
+        session.userData.profile = results.response; // Save user profile.
+        session.send(`Hello ${session.userData.profile.name}! I love ${session.userData.profile.company}!`);
+    }
+]);
+bot.dialog('ensureProfile', [
+    function (session, args, next) {
+        session.dialogData.profile = args || {}; // Set the profile or create the object.
+        if (!session.dialogData.profile.name) {
+            builder.Prompts.text(session, "What's your name?");
+        } else {
+            next(); // Skip if we already have this info.
+        }
+    },
+    function (session, results, next) {
+        if (results.response) {
+            // Save user's name if we asked for it.
+            session.dialogData.profile.name = results.response;
+        }
+        if (!session.dialogData.profile.company) {
+            builder.Prompts.text(session, "What company do you work for?");
+        } else {
+            next(); // Skip if we already have this info.
+        }
+    },
+    function (session, results) {
+        if (results.response) {
+            // Save company name if we asked for it.
+            session.dialogData.profile.company = results.response;
+        }
+        session.endDialogWithResult({ response: session.dialogData.profile });
+    }
+]);
+```
+
+#### **结束瀑布流**
+
+​	用瀑布流创建的对话必须显式标明结尾，不然机器人会无限循环这个瀑布流。你可以用以下任一种方法结束瀑布流：	
+
+- `session.endDialog` :使用此方法结束瀑布流，不会返回数据给上层对话。
+
+- `sessio.endDialogWithResult`: 如果需要返回数据给上层对话，使用此方法。`response` 参数可以是一个 JSON 对象或者任何 JavaScript 的原始数据类型。举例来说：
+
+```javascript
+  session.endDialogWithResult({
+    response: { name: session.dialogData.name, company: session.dialogData.company }
+  });
+```
+
+- `session.endConversation` 当需要结束整个会话的时候，使用此方法。
+
+  ​
+
+  除此以外，你还可以给对话连接`endConversationAction`开关来结束瀑布流。举例来说:
+
+  ```javascript
+  bot.dialog('dinnerOrder', [
+      //...waterfall steps...,
+      // Last step
+      function(session, results){
+          if(results.response){
+              session.dialogData.room = results.response;
+              var msg = `Thank you. Your order will be delivered to room #${session.dialogData.room}`;
+              session.endConversation(msg);
+          }
+      }
+  ])
+  .endConversationAction(
+      "endOrderDinner", "Ok. Goodbye.",
+      {
+          matches: /^cancel$|^goodbye$/i,
+          confirmPrompt: "This will cancel your order. Are you sure?"
+      }
+  );
+  ```
+
+#### **下一步**
+
+  使用瀑布流，你可以利用提示来收集用户信息。接下来让我们来接着了解如何使用提示来使用户进行输入。
+
+### 提示用户进行输入
+
+
+
 
 
 
