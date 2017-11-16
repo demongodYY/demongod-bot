@@ -257,7 +257,7 @@ bot.dialog('askName', [
 
 ##### Prompts.text
 
-​	`Prompts.text()`方法用于要求用户输入一个字符串文本。这个提示返回`IPrompotTextResult`格式下的用户回复。
+​	`Prompts.text()`方法用于要求用户输入一个字符串文本。这个提示返回`IPromptTextResult`格式下的用户回复。
 
 ```javascript
 builder.Prompts.text(session, "What is your name?");
@@ -265,17 +265,145 @@ builder.Prompts.text(session, "What is your name?");
 
 ##### Prompts.confirm
 
-​	使用`Prompts.confirm()`方法提示永辉回复 yes/no 的回复来确认一个动作。
+​	使用`Prompts.confirm()`方法提示用户回复yes/no 来确认一个动作。这个提示返回`IPromptConfirmResult`用户回复
+
+```javascript
+builder.Prompts.confirm(session, "Are you sure you wish to cancel your order?");
+```
+
+
 
 ##### Prompts.number
 
+​	使用`Prompts.number()`方法提示用户回复一个数字,这个提示返回`IPromptNumberResult`用户回复。
+
+```javascript
+builder.Prompts.number(session, "How many would you like to order?");
+```
+
 ##### Prompts.time
+
+​	使用`Prompts.time()` 方法要求用户输入 time  或者 date/time  格式的输入。这个提示会发回`IpromptTimeResult` 格式的用户回复。框架使用  [Chrono](https://github.com/wanasit/chrono) 库来解析用户的回复，并且支持相对时间（比如："in 5 minutes"）或绝对时间 （比如 ："June 6th at 2pm"）。
+
+​	`results.response` 代表用户的回复，包含了一个说明日期和时间的`entity` 对象。要讲这个对象解析到Javascript 的`Date` 对象里，需要使用`EntityRecognizer.resolveTime()` 方法。
+
+```javascript
+bot.dialog('createAlarm', [
+    function (session) {
+        session.dialogData.alarm = {};
+        builder.Prompts.text(session, "What would you like to name this alarm?");
+    },
+    function (session, results, next) {
+        if (results.response) {
+            session.dialogData.name = results.response;
+            builder.Prompts.time(session, "What time would you like to set an alarm for?");
+        } else {
+            next();
+        }
+    },
+    function (session, results) {
+        if (results.response) {
+            session.dialogData.time = builder.EntityRecognizer.resolveTime([results.response]);
+        }
+
+        // Return alarm to caller  
+        if (session.dialogData.name && session.dialogData.time) {
+            session.endDialogWithResult({ 
+                response: { name: session.dialogData.name, time: session.dialogData.time } 
+            }); 
+        } else {
+            session.endDialogWithResult({
+                resumed: builder.ResumeReason.notCompleted
+            });
+        }
+    }
+]);
+```
+
+
 
 ##### Prompts.choice
 
+​	使用`Prompts.choice` 方法要求用户在一个列表中进行选择。用户可以通过输入选项的序号或者名字来进行选择。支持对选项名的全局匹配或局部匹配。返回一个`IPromptsChoiceResult` 结构的用户回复。
+
+​	可以通过对`IpromptOptions.listStyle` 的设置，来指定列表呈现给用户的样式，下面的表格说明了`listStyle` 属性的枚举值：
+
+| Index | Name   | Description                              |
+| ----- | ------ | ---------------------------------------- |
+| 0     | none   | No list is rendered. This is used when the list is included as part of the prompt. |
+| 1     | inline | Choices are rendered as an inline list of the form "1. red, 2. green, or 3. blue". |
+| 2     | list   | Choices are rendered as a numbered list. |
+| 3     | button | Choices are rendered as buttons for channels that support buttons. For other channels they will be rendered as text. |
+| 4     | auto   | The style is selected automatically based on the channel and number of options. |
+
+​	你可以通过	`builder` 对象来访问这个枚举值，或者可以通过提供索引值来选择`listStyle`。下面例子中的两句代码完成了同样的事情。
+
+```javascript
+// ListStyle passed in as Enum
+builder.Prompts.choice(session, "Which color?", "red|green|blue", { listStyle: builder.ListStyle.button });
+
+// ListStyle passed in as index
+builder.Prompts.choice(session, "Which color?", "red|green|blue", { listStyle: 3 });
+```
+
+​	通过竖线分隔符`|` 分开的字符串，字符串数组，或者 map 对象来指定选项：
+
+```javascript
+builder.Prompts.choice(session, "Which color?", "red|green|blue");
+```
+
+```javascript
+builder.Prompts.choice(session, "Which color?", ["red","green","blue"]);
+```
+
+```javascript
+var salesData = {
+    "west": {
+        units: 200,
+        total: "$6,000"
+    },
+    "central": {
+        units: 100,
+        total: "$3,000"
+    },
+    "east": {
+        units: 300,
+        total: "$9,000"
+    }
+};
+
+bot.dialog('getSalesData', [
+    function (session) {
+        builder.Prompts.choice(session, "Which region would you like sales for?", salesData); 
+    },
+    function (session, results) {
+        if (results.response) {
+            var region = salesData[results.response.entity];
+            session.send(`We sold ${region.units} units for a total of ${region.total}.`); 
+        } else {
+            session.send("OK");
+        }
+    }
+]);
+```
+
+ 
+
 ##### Prompts.attachment
 
+​	使用`prompts.attachment` 方法要求用户上传类似图像、视频等文件。这个方法返回`IPromptAttachmentResult` 的用户回复。
 
+```javascript
+builder.Prompts.attachment(session, "Upload a picture for me to transform.");
+```
+
+
+
+#### **下一步**
+
+​	现在你已经能通过瀑布流和提示引导用户提供信息了，接下来让我们看看怎么更好的管理你的回话流
+
+### 管理会话流
 
 
 
