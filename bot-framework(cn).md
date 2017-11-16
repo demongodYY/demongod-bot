@@ -183,9 +183,105 @@ bot.dialog('ensureProfile', [
 
 #### **下一步**
 
-  使用瀑布流，你可以利用提示来收集用户信息。接下来让我们来接着了解如何使用提示来使用户进行输入。
+​	使用瀑布流，你可以利用提示来收集用户信息。接下来让我们来接着了解如何使用提示来使用户进行输入。
 
 ### 提示用户进行输入
+
+​	Node.js版的Bot Builder SDK提供了一套内置提示用于便捷地收集用户的输入。
+
+​	每当机器人需要用户的输入的时候，就可以使用提示。你可以通过对用户提一系列问题使用户回答的方式来连接瀑布流中的提示。你也可以使用提示与瀑布流一起来管理你的机器人的会话流程。
+
+​	这一章会帮助你提示是如何工作的，并且让你知道如何运用提示来收集用户的信息。
+
+#### **提示和回复**
+
+​	每当你需要用户的输入，你就可以发一个提示，等待用户的回复，然后处理这个输入，并给用户反馈。
+
+​	下面这个代码例子提示用户输入名字，并且发送一个欢迎信息：
+
+```javascript
+bot.dialog('greetings', [
+    // Step 1
+    function (session) {
+        builder.Prompts.text(session, 'Hi! What is your name?');
+    },
+    // Step 2
+    function (session, results) {
+        session.endDialog(`Hello ${results.response}!`);
+    }
+]);
+```
+
+​	使用这个基本的结构，你可以添加更多的提示提示和反馈来模拟你的机器人的会话流程。
+
+#### **提示结构**
+
+​	内置提示由对话执行，然后在`results.response`里返回用户的回复。在`results.response.entity`里，回复会返回成JSON对象。任何种类的对话句柄都可以接收提示返回的结果。当机器人接收了回复，它可以处理它或者通过`session.endDialogWithResult`方法将其传会给上层对话。
+
+​	下面的代码例子展示了如何通过`session.endDialogWithResult`方法讲提示收到的结果返回给上层对话。在这个例子中，`greetings`对话使用了`askName`对话返回的提示结果，用于给用户个性的欢迎词。
+
+```javascript
+// Ask the user for their name and greet them by name.
+bot.dialog('greetings', [
+    function (session) {
+        session.beginDialog('askName');
+    },
+    function (session, results) {
+        session.endDialog(`Hello ${results.response}!`);
+    }
+]);
+bot.dialog('askName', [
+    function (session) {
+        builder.Prompts.text(session, 'Hi! What is your name?');
+    },
+    function (session, results) {
+        session.endDialogWithResult(results);
+    }
+]);
+```
+
+**提示类型**
+
+​	Node.js 下的 Bot Builder SDK 包括了一些不同类型的内置提示。
+
+| **Prompt type**                          | **Description**                          |
+| ---------------------------------------- | ---------------------------------------- |
+| [Prompts.text](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-dialog-prompt#promptstext) | Asks the user to enter a string of text. |
+| [Prompts.confirm](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-dialog-prompt#promptsconfirm) | Asks the user to confirm an action.      |
+| [Prompts.number](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-dialog-prompt#promptsnumber) | Asks the user to enter a number.         |
+| [Prompts.time](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-dialog-prompt#promptstime) | Asks the user for a time or date/time.   |
+| [Prompts.choice](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-dialog-prompt#promptschoice) | Asks the user to choose from a list of options. |
+| [Prompts.attachment](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-dialog-prompt#promptsattachment) | Asks the user to upload a picture or video. |
+
+​	接下来会对每一个类型的提示进行详细介绍。
+
+##### Prompts.text
+
+​	`Prompts.text()`方法用于要求用户输入一个字符串文本。这个提示返回`IPrompotTextResult`格式下的用户回复。
+
+```javascript
+builder.Prompts.text(session, "What is your name?");
+```
+
+##### Prompts.confirm
+
+​	使用`Prompts.confirm()`方法提示永辉回复 yes/no 的回复来确认一个动作。
+
+##### Prompts.number
+
+##### Prompts.time
+
+##### Prompts.choice
+
+##### Prompts.attachment
+
+
+
+
+
+
+
+
 
 
 
