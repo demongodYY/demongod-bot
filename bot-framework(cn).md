@@ -405,11 +405,165 @@ builder.Prompts.attachment(session, "Upload a picture for me to transform.");
 
 ### 管理会话流
 
+​	管理会话流是创建机器人的必要步骤。一个机器人应当能够优雅地进行任务并且处理中断。通过 Node.js 下的 Bot Builder SDK ，你可以通过对话来管理会话流。
 
+​	一个对话相当于程序的一个函数，它通常设计用于执行某些特定的操作，并在需要的时候被调用。你可以链接起多个对话用来在机器人中操作会话流。Node.js 下的 Bot Builder SDK 内置了类似 `prompts` （提示）和 ` waterfalls`（瀑布流） 等功能来帮助你管理会话流。
 
+​	这一章提供了一系列例子来解释怎样通过对话，来管理简单或者是可以优雅地响应中断的会话流。这些例子基于以下的场景：
 
+1. 一个可以预订晚餐的机器人。
+2. 这个机器人在预定的过程中可以随时处理 “Help” 指令。
+3. 机器人可以通过上下文识别这个 "Help" 是在预订过程中的哪一步。
+4. 机器人可以进行各种主题的会话。
 
+#### **通过瀑布流来管理会话流**
 
+​	瀑布流是一个允许机器人简单处理一系列任务的对话框。在这个例子中，预订机器人询问了用户一些列问题，以便机器人处理预订的请求。机器人会提示用户输入以下信息：
+
+1. 预定日期/时间
+
+2. 聚会的人数
+
+3. 预订者的名字
+
+   下面的代码展示了如何运用瀑布流来知道用户通过一系列提示来输入信息：
+
+```javascript
+// This is a dinner reservation bot that uses a waterfall technique to prompt users for input.
+var bot = new builder.UniversalBot(connector, [
+    function (session) {
+        session.send("Welcome to the dinner reservation.");
+        builder.Prompts.time(session, "Please provide a reservation date and time (e.g.: June 6th at 5pm)");
+    },
+    function (session, results) {
+        session.dialogData.reservationDate = builder.EntityRecognizer.resolveTime([results.response]);
+        builder.Prompts.number(session, "How many people are in your party?");
+    },
+    function (session, results) {
+        session.dialogData.partySize = results.response;
+        builder.Prompts.text(session, "Whose name will this reservation be under?");
+    },
+    function (session, results) {
+        session.dialogData.reservationName = results.response;
+
+        // Process request and display reservation details
+        session.send(`Reservation confirmed. Reservation details: <br/>Date/Time: ${session.dialogData.reservationDate} <br/>Party size: ${session.dialogData.partySize} <br/>Reservation name: ${session.dialogData.reservationName}`);
+        session.endDialog();
+    }
+```
+
+​	这个机器人的核心功能在默认对话框中。默认对话框在机器人创建时定义：
+
+```javascript
+var bot = new builder.UniversalBot(connector, [..waterfall steps..]); 
+```
+
+​	默认对话框通过函数数组来创建瀑布流中的步骤。在这个例子中，4个函数代表了瀑布流中的4个步骤。每一步都执行了一个任务，并且将结果传递给下一步执行。程序会一直执行到最后一步，确认预订并结束对话框。
+
+​	下面的截图展示了以上代码在  [Bot Framework Emulator](https://docs.microsoft.com/en-us/bot-framework/debug-bots-emulator) 中运行的结果
+
+![Manage conversation flow with waterfall](https://docs.microsoft.com/en-us/bot-framework/media/bot-builder-nodejs-dialog-manage-conversation/waterfall-results.png)
+
+#### **提示用户进行输入**
+
+​	在这个例子中，每一步都使用了提示来引导用户进行输入。一个提示是一个特定的对话框来引导用户进行输入，并将用户的回复传递给瀑布流的下一步。有关提示的信息可以看之前的章节。
+
+​	在这个例子中，机器人用`Prompts.text()` 来征求用户输入一个随意的文本回复。用户可以回复任何文本，然后机器人来处理这个回复。`Prompts.time()` 方法使用了 [Chrono](https://github.com/wanasit/chrono) 库来从字符串中解析日期和时间信息，使得你的机器人可以懂得一些特定格式的日期/时间的语言。比如说："June 6th, 2017 at 9pm", "Today at 7:30pm", "next monday at 6pm", 等等。
+
+#### **用多个对话框来管理会话流**
+
+​	另一种管理会话流的方式，是运用多个对话框的组合瀑布流。瀑布流允许你链接多个对话框在一起，而对话框允许你中断会话流程而进入一小段可以重复调用的功能。
+
+​	就订餐机器人来举例，下面的代码例子展示了如何用多对话框瀑布流来重写之前的例子：
+
+```javascript
+// This is a dinner reservation bot that uses multiple dialogs to prompt users for input.
+var bot = new builder.UniversalBot(connector, [
+    function (session) {
+        session.send("Welcome to the dinner reservation.");
+        session.beginDialog('askForDateTime');
+    },
+    function (session, results) {
+        session.dialogData.reservationDate = builder.EntityRecognizer.resolveTime([results.response]);
+        session.beginDialog('askForPartySize');
+    },
+    function (session, results) {
+        session.dialogData.partySize = results.response;
+        session.beginDialog('askForReserverName');
+    },
+    function (session, results) {
+        session.dialogData.reservationName = results.response;
+
+        // Process request and display reservation details
+        session.send(`Reservation confirmed. Reservation details: <br/>Date/Time: ${session.dialogData.reservationDate} <br/>Party size: ${session.dialogData.partySize} <br/>Reservation name: ${session.dialogData.reservationName}`);
+        session.endDialog();
+    }
+]);
+
+// Dialog to ask for a date and time
+bot.dialog('askForDateTime', [
+    function (session) {
+        builder.Prompts.time(session, "Please provide a reservation date and time (e.g.: June 6th at 5pm)");
+    },
+    function (session, results) {
+        session.endDialogWithResult(results);
+    }
+]);
+
+// Dialog to ask for number of people in the party
+bot.dialog('askForPartySize', [
+    function (session) {
+        builder.Prompts.text(session, "How many people are in your party?");
+    },
+    function (session, results) {
+        session.endDialogWithResult(results);
+    }
+])
+
+// Dialog to ask for the reservation name.
+bot.dialog('askForReserverName', [
+    function (session) {
+        builder.Prompts.text(session, "Who's name will this reservation be under?");
+    },
+    function (session, results) {
+        session.endDialogWithResult(results);
+    }
+]);
+```
+
+​	这个机器人的执行结果和之前的单瀑布流的机器人是一样的。然而，从编程的角度来说，主要有2个方面的不同：
+
+1. 默认对话框专门用来管理会话流
+
+2. 任务的每一步都用专门的对话框来管理。在这个例子中，机器人需要获取3方面的信息，所以提示了用户3次，而每个提示是组成了自己的对话框。
+
+   使用这个技术，你可以用任务逻辑来解耦会话流。这样可以似的对话框可以在不同的对话流中重复运用。
+
+#### **响应用户输入**
+
+​	在引导用户进行一系列任务的时候，如果用户在回答之前提出问题或者想要更多的信息，你该怎么处理这些请求呢？
+
+​	举例来说，无论用户在进行会话的什么时候，机器人该如何相应当用户提出了类似 “Help”, "Support" 或者 “Cancel” 这一类的输入呢？如果用户想要当前步骤更多的信息呢？如果用户改变了主意，想中止当前会话，而开始另外一个会话呢？
+
+​	Node.js 下的 Bot Builder SDK 允许机器人监听全局或者当前对话框作用域下的关键输入。这些输入被称为动作，它允许机器人通过 `matches` 语句 来对其进行监听。
+
+#####  响应全局动作
+
+​	如果你想要你的机器人在会话的任意地方可以响应动作，使用 `triggerAction` 。触发器允许当输入匹配到特殊的项目时弹出指定的对话框。举例来说：如果你想要支持全局的 "Help" 设置，你可以创建一个 help 对话框绑定 `triggerAction` 来监听输入匹配到 “Help”。
+
+​	以下的代码例子展示了如何在对话框中添加 `triggerAction`  来指定当用户输入 "help" 时弹出的对话框。
+
+```javascript
+// The dialog stack is cleared and this dialog is invoked when the user enters 'help'.
+bot.dialog('help', function (session, args, next) {
+    session.endDialog("This is a bot that can help you make a dinner reservation. <br/>Please say 'next' to continue");
+})
+.triggerAction({
+    matches: /^help$/i,
+});
+```
+
+​	默认情况下，当一个`triggerAction` 触发的时候，当前的对话框栈会被清除，并且触发的对话框会成为新的默认对话框。在这个例子里，当`triggerAction` 触发，对话框栈被清除，之后 `help` 对话框被加到栈内成为新的默认对话框
 
 
 

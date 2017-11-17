@@ -20,7 +20,7 @@ bot.dialog('reservation', [
     },
     (session, results) =>{
         session.dialogData.reservation.time = builder.EntityRecognizer.resolveTime([results.response]);
-        builder.Prompts.text(session, "您需要预定几人的包间？");
+        builder.Prompts.choice(session, "您需要预定几人的包间？","1|2|3|4|5|6",{listStyle: 3});
     },
     (session, results, next) => {
         session.dialogData.reservation.peopleNum = results.response;
