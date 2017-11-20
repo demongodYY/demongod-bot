@@ -583,6 +583,38 @@ bot.dialog('help', function (session, args, next) {
 
 ​	在这个例子中，`help` 对话框会在会话里响应当用户输入 "help" 的操作。因为`triggerAction` 包含了 `onSelectAction` 设置，`help` 对话框被压入了对话框栈的顶部，并且之前的对话框栈没有清除。当 `help` 对话框结束时，它会被从对话框栈中移除，并且会话会回到之前中断的地方。
 
+##### 响应上下文动作
+
+​	在上一个例子中，`help` 对话框在会话的任意时候都会响应用户输入的 "help"。因此，这个对话框只能提供总体的帮助，而不会针对上下文响应用户的 "help" 请求。但是，如果用户想要一个关于特定信息的帮助呢？在这一节中，`help` 必须根据当前对话框的上下文来进行响应。
+
+​	以订餐机器人来举例，假设当用户回答机器人所询问派对的人数时，用户想知道支持的最大人数。对于这种情况，你可以添加 `beginDialogAction`  在 `askForPartySize` 对话框下，监听用户的 `help` 输入。
+
+​	以下的代码示例展示了如何运用 `beginDialogAction`添加一个对上下文敏感的  "help"对话框。
+
+```javascript
+// Dialog to ask for number of people in the party
+bot.dialog('askForPartySize', [
+    function (session) {
+        builder.Prompts.text(session, "How many people are in your party?");
+    },
+    function (session, results) {
+       session.endDialogWithResult(results);
+    }
+])
+.beginDialogAction('partySizeHelpAction', 'partySizeHelp', { matches: /^help$/i });
+
+// Context Help dialog for party size
+bot.dialog('partySizeHelp', function(session, args, next) {
+    var msg = "Party size help: Our restaurant can support party sizes up to 150 members.";
+    session.endDialog(msg);
+})
+
+```
+
+​	在这个例子中，当用户输入“help”时，机器人会将 `partySizeHelp` 对话框压人栈中。这个对话框发送了帮助消息给用户并会自动结束，返回到上一级 `askForPartySize` 对话框，提示用户输入派对规模。
+
+​	值得注意的时，这个上下文敏感的 help 消息只当用户在 `askForPartySize` 对话框中的时候执行。除此以外，来自 `triggerAction` 的通用 help 消息会替代它执行。换句话说，本地的 `match` 总是优先于全局的  `match` 。举例来说，如果`beginDialogAction` 匹配了 **help**  ,那么来自 `triggerAction` 的 **help** 就不会执行了。更多信息，请查看动作优先级的章节。
+
 
 
 
