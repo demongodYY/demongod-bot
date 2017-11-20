@@ -563,7 +563,25 @@ bot.dialog('help', function (session, args, next) {
 });
 ```
 
-​	默认情况下，当一个`triggerAction` 触发的时候，当前的对话框栈会被清除，并且触发的对话框会成为新的默认对话框。在这个例子里，当`triggerAction` 触发，对话框栈被清除，之后 `help` 对话框被加到栈内成为新的默认对话框
+​	默认情况下，当一个`triggerAction` 触发的时候，当前的对话框栈会被清除，并且触发的对话框会成为新的默认对话框。在这个例子里，当`triggerAction` 触发，对话框栈被清除，之后 `help` 对话框被加到栈内成为新的默认对话框。如果这不是期望的行为，你可以添加 `onSelectAction` 设置给 `triggerAction` 。`onSelectAction` 设置允许机器人在不清楚对话框栈的情况下开始一个新的对话框，是的会话可以临时的重定向，并在之后回到之前的地方。
+
+​	以下的代码例子展示了如何使用`onSelectAction` 和 `triggerAction` 来将 `help` 对话框添加到已经存在的对话框栈中（对话框栈不会被清除）
+
+```javascript
+bot.dialog('help', function (session, args, next) {
+    session.endDialog("This is a bot that can help you make a dinner reservation. <br/>Please say 'next' to continue");
+})
+.triggerAction({
+    matches: /^help$/i,
+    onSelectAction: (session, args, next) => {
+        // Add the help dialog to the dialog stack 
+        // (override the default behavior of replacing the stack)
+        session.beginDialog(args.action, args);
+    }
+});
+```
+
+​	在这个例子中，`help` 对话框会在会话里响应当用户输入 "help" 的操作。因为`triggerAction` 包含了 `onSelectAction` 设置，`help` 对话框被压入了对话框栈的顶部，并且之前的对话框栈没有清除。当 `help` 对话框结束时，它会被从对话框栈中移除，并且会话会回到之前中断的地方。
 
 
 
