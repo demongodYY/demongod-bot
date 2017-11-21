@@ -903,7 +903,174 @@ bot.dialog('orderDinner', [
 
 #### 对话框循环
 
+​	在上面的例子里，用户只能在订单里选择一个选项。也就是说，如果用户想要从菜单里选择两个选项，他们得先完成一次预定流程，然后再为第二个选项重复一次整个流程。
 
+​	下面的例子展示了如何通过重构将菜单分离，而改进上面的机器人。这样做可以使机器人的晚餐菜单在一个循环里重复，从而允许用户选择多个选项。
+
+​	首先，添加一个 “Check out” 选项到菜单里。这个选项将会允许用户退出选择流程，并进行接下来的流程。
+
+```javascript
+// The dinner menu
+var dinnerMenu = { 
+    //...other menu items...,
+    "Check out": {
+        Description: "Check out",
+        Price: 0 // Order total. Updated as items are added to order.
+    }
+};
+```
+
+​	接下来，重构预定对话框中的提示，使得机器人可以重复菜单，允许用户在他们的订单里添加多个选项。
+
+```javascript
+// Add dinner items to the list by repeating this dialog until the user says `check out`. 
+bot.dialog("addDinnerItem", [
+    function(session, args){
+        if(args && args.reprompt){
+            session.send("What else would you like to have for dinner tonight?");
+        }
+        else{
+            // New order
+            // Using the conversationData to store the orders
+            session.conversationData.orders = new Array();
+            session.conversationData.orders.push({ 
+                Description: "Check out",
+                Price: 0
+            })
+        }
+        builder.Prompts.choice(session, "Dinner menu:", dinnerMenu);
+    },
+    function(session, results){
+        if(results.response){
+            if(results.response.entity.match(/^check out$/i)){
+                session.endDialog("Checking out...");
+            }
+            else {
+                var order = dinnerMenu[results.response.entity];
+                session.conversationData.orders[0].Price += order.Price; // Add to total.
+                var msg = `You ordered: ${order.Description} for a total of $${order.Price}.`;
+                session.send(msg);
+                session.conversationData.orders.push(order);
+                session.replaceDialog("addDinnerItem", { reprompt: true }); // Repeat dinner menu
+            }
+        }
+    }
+])
+.reloadAction(
+    "restartOrderDinner", "Ok. Let's start over.",
+    {
+        matches: /^start over$/i,
+        confirmPrompt: "This will cancel your order. Are you sure?"
+    }
+);
+```
+
+​	在这个例子中，订单存储在机器人的当前会话的数据存储中，叫做 `session.conversationData.orders` 。对于每个新订单，会重新初始化一个数组变量，而对于用户的每个选择，机器人会添加这个选项到 `orders` 数组，并且将总价添加上去。当用户完成选择，他们可以说 "check out" 继续他们订单其余的流程。
+
+​	最后，将`orderDinner` 对话框瀑布流的第二步进行更新，来进行订单确认的流程。
+
+```javascript
+// Menu: "Order dinner"
+// This dialog allows user to order dinner and have it delivered to their room.
+bot.dialog('orderDinner', [
+    function(session){
+        session.send("Lets order some dinner!");
+        session.beginDialog("addDinnerItem");
+    },
+    function (session, results) {
+        if (results.response) {
+            // Display itemize order with price total.
+            for(var i = 1; i < session.conversationData.orders.length; i++){
+                session.send(`You ordered: ${session.conversationData.orders[i].Description} for a total of $${session.conversationData.orders[i].Price}.`);
+            }
+            session.send(`Your total is: $${session.conversationData.orders[0].Price}`);
+
+            // Continue with the check out process.
+            builder.Prompts.text(session, "What is your room number?");
+        } 
+    },
+    function(session, results){
+        if(results.response){
+            session.dialogData.room = results.response;
+            var msg = `Thank you. Your order will be delivered to room #${results.response}`;
+            session.send(msg);
+            session.replaceDialog("mainMenu");
+        }
+    }
+])
+//...attached triggers...
+;
+```
+
+#### 退出对话框
+
+​	 `session.replaceDialog` 方法可以用于将当前对话框替换成一个新的，却不能用一个在栈中位于对话框下方的对话框来替代。要用不是当前的对话框来替代一个对话框，需要用 `session.cancelDialog` 方法代替。
+
+​	`session.cancelDialog` 方法用于结束一个位于栈中任意位置的对话框，并且可以唤醒一个新的对话框。调用 `session.cancelDialog` 方法，需要指定要退出的对话框的ID，并可以提供一个其他需要唤醒对话框ID。举个例子，这个代码片段使 `orderDinner` 对话框退出，并且替代了 `mainMenu` 对话框
+
+```javascript
+session.cancelDialog('orderDinner', 'mainMenu'); 
+```
+
+​	当 `session.cancelDialog` 方法被调用，对话框栈会向后搜索，并且最近一个发生的对话框会被退出，造成那个对话框和它的子对话框会被从栈中移除。控制流程会发回上层对话框，可以通过比较 `results.resumed` 和 `ResumeReason.notCompleted` 来检测退出过程。
+
+​	调用 `session.cancelDialog` 也可以指定对话框的ID，你可以指定一个从0开始的对话框索引值来退出，这个索引值代表了对话框在栈中的位置。举个例子，下面的代码片段终止了当前的活动对话框 （index = 0）并且开始了  `mainMenu` 对话框在原来的位置。`mainMenu` 对话框被在栈中的 0 位置唤醒，因此成为了新的默认对话框。
+
+```javascript
+session.cancelDialog(0, 'mainMenu');
+```
+
+​	考虑之前的对话框循环的例子。当用户得到选择菜单，（`addDinnerItem`）对话框是栈中的第4个对话框： `[default dialog, mainMenu, orderDinner, addDinnerItem]` 。你怎样使得用户在 `addDinnerItem` 对话框中退出他们的订单呢？如果你添加了 `cancelAction` 触发器在 `addDinnerItem` 对话框上，它只会回到上一个对话框 （`orderDinner`）, 然后从新给用户发送一个 `addDinnerItem` 对话框。
+
+​	在这里，`session.cancelDialog` 方法将会很有用。在对话框循环的例子中，在晚餐菜单中添加明确的 “Cancel order” 选项。
+
+ ```javascript
+// The dinner menu
+var dinnerMenu = { 
+    //...other menu items...,
+    "Check out": {
+        Description: "Check out",
+        Price: 0      // Order total. Updated as items are added to order.
+    },
+    "Cancel order": { // Cancel the order and back to Main Menu
+        Description: "Cancel order",
+        Price: 0
+    }
+};
+ ```
+
+​	然后，更新 `addDinnerItem` 对话框来检测 "cancel order"  请求。如果 “cancel” 被检测到，运用 `session.cancelDialog` 方法来退出默认对话框，并在这个位置上唤醒  `mainMenu` 对话框。
+
+```javascript
+// Add dinner items to the list by repeating this dialog until the user says `check out`. 
+bot.dialog("addDinnerItem", [
+    //...waterfall steps...,
+    // Last step
+    function(session, results){
+        if(results.response){
+            if(results.response.entity.match(/^check out$/i)){
+                session.endDialog("Checking out...");
+            }
+            else if(results.response.entity.match(/^cancel/i)){
+                // Cancel the order and start "mainMenu" dialog.
+                session.cancelDialog(0, "mainMenu");
+            }
+            else {
+                //...add item to list and prompt again...
+                session.replaceDialog("addDinnerItem", { reprompt: true }); // Repeat dinner menu.
+            }
+        }
+    }
+])
+//...attached triggers...
+;
+```
+
+​	通过这样使用 `session.cancelDialog` 方法，你可以为你的机器人实现任何会话流程。
+
+#### 下一步
+
+​	通过替换栈中的对话框，你可以通过变化的  **动作**  来完成对话框栈。动作使你可以灵活的管理会话流程。接下来让我们仔细地了解 **actions** 使怎样更好的响应用户的操作的。
 
 
 
