@@ -2,6 +2,8 @@
 
 ## 关键概念
 
+..............
+
 ## 对话
 
 ### 对话概念
@@ -614,6 +616,298 @@ bot.dialog('partySizeHelp', function(session, args, next) {
 ​	在这个例子中，当用户输入“help”时，机器人会将 `partySizeHelp` 对话框压人栈中。这个对话框发送了帮助消息给用户并会自动结束，返回到上一级 `askForPartySize` 对话框，提示用户输入派对规模。
 
 ​	值得注意的时，这个上下文敏感的 help 消息只当用户在 `askForPartySize` 对话框中的时候执行。除此以外，来自 `triggerAction` 的通用 help 消息会替代它执行。换句话说，本地的 `match` 总是优先于全局的  `match` 。举例来说，如果`beginDialogAction` 匹配了 **help**  ,那么来自 `triggerAction` 的 **help** 就不会执行了。更多信息，请查看动作优先级的章节。
+
+##### 改变会话的主题
+
+​	默认情况下，执行 `triggerAction` 会清楚对话框栈并重置会话，然后打开一个特定的对话框。这个行为通常用于当你的机器人需要更换会话的主题，比如说一个用户在预定晚餐座位的过程中，决定要将预定的晚餐送到他们的房间里去。
+
+​	下面的例子在之前的例子上进行了升级，使机器人允许用户选择预订晚餐的座位或者是预定一个外卖。在这个机器人中，默认的对话框发送的欢迎语中给了用户两个选项：`Dinner Reservation` 或 `Order Dinner` 。
+
+```javascript
+// This bot enables users to either make a dinner reservation or order dinner.
+var bot = new builder.UniversalBot(connector, function(session){
+    var msg = "Welcome to the reservation bot. Please say `Dinner Reservation` or `Order Dinner`";
+    session.send(msg);
+});
+```
+
+​	之前例子中的默认对话框里的订餐逻辑在这个例子成为了一个叫 `dinnerReservation` 的单独的对话框。`dinnerReservation` 的流程与之前所讲的多对话框的例子的版本是一致的。唯一的不同是，这个对话框添加了一个 `triggerAction` 。注意在这个版本中，`confirmPrompt` 会在弹出新对话框之前询问用户确认他们是否想改变会话的主题。像这样在场景中添加 `confirmPrompt` 是一个不错的实践，因为一旦对话框栈清空了，用户会重定向到一个新的会话主题，从而放弃之前的会话主题。
+
+```javascript
+// This dialog helps the user make a dinner reservation.
+bot.dialog('dinnerReservation', [
+    function (session) {
+        session.send("Welcome to the dinner reservation.");
+        session.beginDialog('askForDateTime');
+    },
+    function (session, results) {
+        session.dialogData.reservationDate = builder.EntityRecognizer.resolveTime([results.response]);
+        session.beginDialog('askForPartySize');
+    },
+    function (session, results) {
+        session.dialogData.partySize = results.response;
+        session.beginDialog('askForReserverName');
+    },
+    function (session, results) {
+        session.dialogData.reservationName = results.response;
+
+        // Process request and display reservation details
+        session.send(`Reservation confirmed. Reservation details: <br/>Date/Time: ${session.dialogData.reservationDate} <br/>Party size: ${session.dialogData.partySize} <br/>Reservation name: ${session.dialogData.reservationName}`);
+        session.endDialog();
+    }
+])
+.triggerAction({
+    matches: /^dinner reservation$/i,
+    confirmPrompt: "This will cancel your current request. Are you sure?"
+});
+```
+
+​	第二个会话主题定义在 `orderDinner` 瀑布流会话框中。这个对话框简单的展示了菜单，并且在用户选择以后提示用户输入房间号。一个 `triggerAction` 添加在这个对话框上，当用户输入 “order dinner” 时提示用户确认他们的选择，然后改变会话的主题。
+
+```javascript
+// This dialog help the user order dinner to be delivered to their hotel room.
+var dinnerMenu = {
+    "Potato Salad - $5.99": {
+        Description: "Potato Salad",
+        Price: 5.99
+    },
+    "Tuna Sandwich - $6.89": {
+        Description: "Tuna Sandwich",
+        Price: 6.89
+    },
+    "Clam Chowder - $4.50":{
+        Description: "Clam Chowder",
+        Price: 4.50
+    }
+};
+
+bot.dialog('orderDinner', [
+    function(session){
+        session.send("Lets order some dinner!");
+        builder.Prompts.choice(session, "Dinner menu:", dinnerMenu);
+    },
+    function (session, results) {
+        if (results.response) {
+            var order = dinnerMenu[results.response.entity];
+            var msg = `You ordered: ${order.Description} for a total of $${order.Price}.`;
+            session.dialogData.order = order;
+            session.send(msg);
+            builder.Prompts.text(session, "What is your room number?");
+        } 
+    },
+    function(session, results){
+        if(results.response){
+            session.dialogData.room = results.response;
+            var msg = `Thank you. Your order will be delivered to room #${session.dialogData.room}`;
+            session.endDialog(msg);
+        }
+    }
+])
+.triggerAction({
+    matches: /^order dinner$/i,
+    confirmPrompt: "This will cancel your order. Are you sure?"
+});
+```
+
+​	在用户开始一个会话并选择 `Dinner Reservation` 或者 `Order Dinner` 后，他们随时还是可能会改变主意。举个例子，如果用户在预定晚餐座位的同时输入了 “order dinner” , 机器人会说：“This will cancel your current request. Are you sure？” 。如果用户回答 “no” ，那么请求就会退出，继续预定晚餐座位的流程，否则的话，机器人会清空对话框栈然后将会话重定向到 “orderDinner” 对话框。
+
+#### 结束会话
+
+​	在上面的例子中，对话框用 `session.endDialog` 或者 `session.endDialogWithResult` 来结束，这两种方法都会将对话框从栈中移出，并返回上一级对话框。在用户需要结束会话的时候，你应该使用 `session.endConversation` 来表明会话已经结束了。
+
+​	`session.endConversation` 方法用于结束对话，并且可以在同时给用户发送消息。举个例子，在之前例子中的 `orderDinner` 对话框，可以用以下的代码来结束会话。
+
+```javascript
+bot.dialog('orderDinner', [
+    //...waterfall steps...
+    // Last step
+    function(session, results){
+        if(results.response){
+            session.dialogData.room = results.response;
+            var msg = `Thank you. Your order will be delivered to room #${session.dialogData.room}`;
+            session.endConversation(msg);
+        }
+    }
+]);
+```
+
+​	调用 `session.endConversation` 会结束会话，清空对话框栈，重置 `session.conversationData` 存储对象。关于存储的更多信息，请看**数据状态管理**一章
+
+​	`session.endCOnversation` 逻辑应当在用户完成了机器人所设计的会话流程时调用。你也可以随时在用户输入了 "cancel" 或 "goodebye" 的时候调用 `session.endConversation` 来结束会话。简单地在对话框中添加 `endConversationAction` 触发器来监听用户的 "cancel" 或 "goodbye" 一类的话语就可以做到这点。
+
+​	下面的代码例子展示了如何将 `endConversationAction` 添加到一个对话框里，当用户输入 "cancel" 或者 "goodebye" 时来结束对话。
+
+```javascript
+bot.dialog('dinnerOrder', [
+    //...waterfall steps...
+])
+.endConversationAction(
+    "endOrderDinner", "Ok. Goodbye.",
+    {
+        matches: /^cancel$|^goodbye$/i,
+        confirmPrompt: "This will cancel your order. Are you sure?"
+    }
+);
+```
+
+​	当使用 `session.endConversation` 或者 `endConversationAction` 来结束会话，会清空对话框栈，并且强迫用户重新开始会话。你应当使用 `confirmPrompt` 来确认用户确实想这么做。
+
+#### 下一步
+
+​	在这一章中，你知道了使用自然顺序来管理会话的方法。但如果你想要使用循环模式在会话中重复一个对话框呢？接下来让我们看看怎样在栈中替换对话框。
+
+### 替换对话框
+
+​	当你需要在会话中验证用户的输入或者重复一个动作，替换对话框是非常有用的能力。使用 Node.js 版 Bot Builder SDK，你可以运用 `session.replaceDialog` 方法来替换对话框 。这个方法使你能够结束当前对话框，并用一个新的对话框代替它，而不会返回上层对话框。
+
+#### 自定义用于输入验证的提示
+
+​	Node.js 版的 Bot Builder SDK 包括了一些类型提示的输入验证，比如说 `Prompts.time` , `Prompts.choice` 等等。但如果你想对 `Prompts.text` 收到的文本输入进行验证，你必须创建你自己的验证逻辑和自定义的提示。
+
+​	如果一个输入需要执行一个你定义的关键值，模式，范围，标准，你可能会需要进行输入验证。如果输入验证失败，可以运用 `session.replaceDialog` ,让机器人可以提示用户重新进行输入。
+
+​	下面的代码例子展示了如何创建一个自定义的提示用于验证用户输入的电话号码。
+
+```javascript
+// This dialog prompts the user for a phone number. 
+// It will re-prompt the user if the input does not match a pattern for phone number.
+bot.dialog('phonePrompt', [
+    function (session, args) {
+        if (args && args.reprompt) {
+            builder.Prompts.text(session, "Enter the number using a format of either: '(555) 123-4567' or '555-123-4567' or '5551234567'")
+        } else {
+            builder.Prompts.text(session, "What's your phone number?");
+        }
+    },
+    function (session, results) {
+        var matched = results.response.match(/\d+/g);
+        var number = matched ? matched.join('') : '';
+        if (number.length == 10 || number.length == 11) {
+            session.userData.phoneNumber = number; // Save the number.
+            session.endDialogWithResult({ response: number });
+        } else {
+            // Repeat the dialog
+            session.replaceDialog('phonePrompt', { reprompt: true });
+        }
+    }
+]);
+```
+
+​	在这个例子中，一开始提示用户输入他们的电话号码。验证逻辑使用了一个正则表达是来匹配用户输入的是数字范围。如果输入包括 10 或者 11个数字，这个数字就会在回复里返回。否则的话，`session.replaceDialog` 方法将被执行用来替代 `phonePrompt` 对话框，提示用户重新输入，并给用户提供了关于格式的指导。
+
+​	当你调用 `session.replaceDialog` 方法，你需要指定对话框的名字和一个参数列表。在这个例子里，参数列表包括了 `{ reprompt: true }` ，使得机器人可以根据不同的情况提供不同的消息。你还可以给你的机器人指定各种你需要的参数。
+
+#### 重复一个动作
+
+​	在一个会话中，你可以能需要重复一个对话框多次以便用户完成某项任务。举个例子，如果你的机器人提供了一种服务，你可能在一开始展示服务的菜单，让用户通过请求的服务，然后再次显示这个菜单，以便用户可以请求另外一个服务。为了达成这样的效果，你可以在使用 `session.endConversation` 方法结束会话之前，使用 `session.replaceDialog` 方法来再次显示服务菜单。
+
+​	下面的例子展示了如何运用 `session.replaceDialog` 方法来实现场景的类型。首先，定义一个服务的菜单：
+
+```javascript
+// Main menu
+var menuItems = { 
+    "Order dinner": {
+        item: "orderDinner"
+    },
+    "Dinner reservation": {
+        item: "dinnerReservation"
+    },
+    "Schedule shuttle": {
+        item: "scheduleShuttle"
+    },
+    "Request wake-up call": {
+        item: "wakeupCall"
+    },
+}
+```
+
+​	`mainMenu` 对话框被默认对话框唤醒，所以菜单将会在会话中首先显示。另外，一个  `triggerAction` 被附加在 `mainMenu` 上，以便于用户在随时输入 “main menu” 时显示。当用户看到菜单，并且选择了一个选项，对应的对话将被 `session.beginDialog` 方法唤醒。
+
+```javascript
+// This is a reservation bot that has a menu of offerings.
+var bot = new builder.UniversalBot(connector, [
+    function(session){
+        session.send("Welcome to Contoso Hotel and Resort.");
+        session.beginDialog("mainMenu");
+    }
+]);
+
+// Display the main menu and start a new request depending on user input.
+bot.dialog("mainMenu", [
+    function(session){
+        builder.Prompts.choice(session, "Main Menu:", menuItems);
+    },
+    function(session, results){
+        if(results.response){
+            session.beginDialog(menuItems[results.response.entity].item);
+        }
+    }
+])
+.triggerAction({
+    // The user can request this at any time.
+    // Once triggered, it clears the stack and prompts the main menu again.
+    matches: /^main menu$/i,
+    confirmPrompt: "This will cancel your request. Are you sure?"
+});
+```
+
+​	在这个例子中，如果用户选择选项 1 要求预定一份送到房间的晚餐，`orderDinner` 对话框将会被唤醒，以便于用户预定晚餐。在这个流程的最后，机器人会确认这份订单，并使用 `session.replaceDialog` 方法再次显示主菜单。
+
+```javascript
+// Menu: "Order dinner"
+// This dialog allows user to order dinner to be delivered to their hotel room.
+bot.dialog('orderDinner', [
+    function(session){
+        session.send("Lets order some dinner!");
+        builder.Prompts.choice(session, "Dinner menu:", dinnerMenu);
+    },
+    function (session, results) {
+        if (results.response) {
+            var order = dinnerMenu[results.response.entity];
+            var msg = `You ordered: %(Description)s for a total of $${order.Price}.`;
+            session.dialogData.order = order;
+            session.send(msg);
+            builder.Prompts.text(session, "What is your room number?");
+        } 
+    },
+    function(session, results){
+        if(results.response){
+            session.dialogData.room = results.response;
+            var msg = `Thank you. Your order will be delivered to room #${results.response}.`;
+            session.send(msg);
+            session.replaceDialog("mainMenu"); // Display the menu again.
+        }
+    }
+])
+.reloadAction(
+    "restartOrderDinner", "Ok. Let's start over.",
+    {
+        matches: /^start over$/i,
+        confirmPrompt: "This wil cancel your order. Are you sure?"
+    }
+)
+.cancelAction(
+    "cancelOrder", "Type 'Main Menu' to continue.", 
+    {
+        matches: /^cancel$/i,
+        confirmPrompt: "This will cancel your order. Are you sure?"
+    }
+);
+```
+
+​	`orderDinner` 对话框加了两个触发器，使得用户可以在预定流程中随时 “重新开始” 或者 “退出”。
+
+​	第一个触发器是 `reloadAction` ，允许用户在输入 “start over” 的时候重新开始预订的流程。当触发器匹配到 “start over” 输入，`reloadAction` 将从头开始对话框。
+
+​	第二个触发器是 `cancelAction` ，允许用户在输入 “cancel” 的时候终止预定流程。这个触发器不会自动再次显示主菜单，但是可以发送一个 "Type Main Menu to continue" 消息给用户，提示用户进行下一步。
+
+#### 对话框循环
+
+
+
+
+
+
 
 
 
