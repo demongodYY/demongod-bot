@@ -1072,6 +1072,119 @@ bot.dialog("addDinnerItem", [
 
 ​	通过替换栈中的对话框，你可以通过变化的  **动作**  来完成对话框栈。动作使你可以灵活的管理会话流程。接下来让我们仔细地了解 **actions** 使怎样更好的响应用户的操作的。
 
+### 操作用户的动作
+
+​	用户通常会尝试用类似 “help", "cancel", 或者 "start over" 这一类的关键词来尝试进行一些确定的功能。用户会在会话的中间进行这些操作，此时机器人可能会期望另外的回复。为了实现 **actions**, 你应当更优雅的设计你的机器人来处理这些请求。这些响应会检测用户的输入，当监听到有类似 "help", "cancel", "start over" 这一类的关键词，就进行适当的回复。
+
+![how users talk](https://docs.microsoft.com/en-us/bot-framework/media/designing-bots/capabilities/trigger-actions.png)
+
+#### 动作种类
+
+​	下面列着你可以给对话框添加的动作种类。点击每一个名字查看细节。
+
+| Action                                   | Scope      | Description                              |
+| ---------------------------------------- | ---------- | ---------------------------------------- |
+| [triggerAction](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-dialog-actions#bind-a-triggeraction) | Global     | Binds an action to the dialog that will clear the dialog stack and push itself onto the bottom of stack. Use `onSelectAction` option to override this default behavior. |
+| [customAction](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-dialog-actions#bind-a-customaction) | Global     | Binds a custom action to the bot that can process information or take action without affecting the dialog stack. Use `onSelectAction` option to customize the functionality of this action. |
+| [beginDialogAction](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-dialog-actions#bind-a-begindialogaction) | Contextual | Binds an action to the dialog that starts another dialog when it is triggered. The starting dialog will be pushed onto the stack and popped off once it ends. |
+| [reloadAction](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-dialog-actions#bind-a-reloadaction) | Contextual | Binds an action to the dialog that causes the dialog to reload when it is triggered. You can use `reloadAction` to handle user utterances like "start over." |
+| [cancelAction](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-dialog-actions#bind-a-cancelaction) | Contextual | Binds an action to the dialog that cancels the dialog when it is triggered. You can use `cancelAction` to handle user utterances like "cancel" or "nevermind." |
+| [endConversationAction](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-dialog-actions#bind-an-endconversationaction) | Contextual | Binds an action to the dialog that ends the conversation with the user when triggered. You can use `endConversationAction` to handle user utterances like "goodbye." |
+
+#### 动作的优先权
+
+​	当机器人接收到一个用户的发言，他会针对对话框栈上所有注册的动作进行检查。匹配是从栈顶到栈底的顺序开始的。如果没有匹配，就会在全局动作的 `matches` 选项中进行匹配。
+
+​	动作优先权在你在不同的上下文中使用同样的命令的情况下尤其重要。举个例子，你可以给机器人使用 ”Help“ 命令来进行整体帮助。你也可以使用 "Help" 命令给某项具体的跟上下文有关的任务进行帮助。关于这些的详细叙述，请看 ”响应用户输入“ 一章。
+
+#### 将动作绑定到对话框
+
+​	用户的发言和点击按钮都能触发相关对话框的一个动作。如果指定了匹配规则，动作会监听用户输入的词语或者短语来触发动作。`matches` 选项可以设置一个正则表达式或者名称识别。绑定动作到按钮点击，可以使用 `CardAction.dialogAction()` 方法来触发动作。
+
+​	动作是可以链接的，这样可以让你绑定更多的动作到你的对话框上。
+
+##### 绑定一个 triggerAction
+
+​	要绑定一个 `triggerAction` 到对话框，可以像下面这么做：
+
+```javascript
+// Order dinner.
+bot.dialog('orderDinner', [
+    //...waterfall steps...
+])
+// Once triggered, will clear the dialog stack and pushes
+// the 'orderDinner' dialog onto the bottom of stack.
+.triggerAction({
+    matches: /^order dinner$/i
+});
+```
+
+​	将一个 `triggerAction` 绑定到一个对话框上，就是将它注册到了机器人上。一旦触发，`triggerAction` 将会清楚对话框栈并且将触发的对话框压入栈中。这个动作最好用于切换会话的主题，或者用于允许用户请求任意独立的任务。如果你想覆盖清楚对话框栈的这个操作，可以将一个 `onSelectAction` 选项添加到 `triggerAction` 上。
+
+​	下面的代码片段展示了如何在全局上下文中提供一个整体的帮助对话框，而不会清空这个对话框栈。
+
+```javascript
+bot.dialog('help', function (session, args, next) {
+    //Send a help message
+    session.endDialog("Global help menu.");
+})
+// Once triggered, will start a new dialog as specified by
+// the 'onSelectAction' option.
+.triggerAction({
+    matches: /^help$/i,
+    onSelectAction: (session, args, next) => {
+        // Add the help dialog to the top of the dialog stack 
+        // (override the default behavior of replacing the stack)
+        session.beginDialog(args.action, args);
+    }
+});
+```
+
+​	在这个例子中，`triggerAction` 被添加到了 `help` 对话框自己上。`onSelectAction` 选项允许你开始这个对话框而不用清空对话框栈。这样允许你可以处理类似 "help", "about", "support" 这一类的全局请求。注意 `onSelectAction` 选项明确地调用了 `session.beginDialog` 方法来开始被触发的对话框。`args.action` 参数提供了被触发对话框的ID。不要在这个方法里手动编辑对话框ID，否则你将会得到一个运行报错。如果你想在 `orderDinner` 任务里触发一个跟上下文有关的帮助消息，你可以考虑给 `orderDinner` 对话框添加 `beginDialogAction` 来替代。
+
+##### 绑定一个 reloadAction
+
+​	绑定一个 `reloadAction` 到一个对话框将会将它注册到对话框。将这个动作绑定到对话框，在触发的时候会导致对话框重新开始。触发这个动作和调用 `replaceDialog` 方法类似。这在实现类似用户输入 "start over" 或者创建一个循环的逻辑的时候非常有用。
+
+​	下面的代码片段展示了如何将 `reloadAction` 绑定的对话框。
+
+```javascript
+// Order dinner.
+bot.dialog('orderDinner', [
+    //...waterfall steps...
+])
+// Once triggered, will restart the dialog.
+.reloadAction('startOver', 'Ok, starting over.', {
+    matches: /^start over$/i
+});
+```
+
+​	在这个例子中，当你需要传入一些参数给重新加载的对话框的时候，你可以添加一个 `dialogArgs` 选项给这个动作。这个选项。这个选项被传递给对话框的 `args` 参数。重写上面的代码例子，使得重载的动作能够获取到参数，看起来会像这样：
+
+```javascript
+// Order dinner.
+bot.dialog('orderDinner', [
+    function(session, args, next){
+        if(args && args.isReloaded){
+            // Reload action was triggered.
+        }
+
+        session.send("Lets order some dinner!");
+        builder.Prompts.choice(session, "Dinner menu:", dinnerMenu);
+    }
+    //...other waterfall steps...
+])
+// Once triggered, will restart the dialog.
+.reloadAction('startOver', 'Ok, starting over.', {
+    matches: /^start over$/i,
+    dialogArgs: {
+        isReloaded: true;
+    }
+});
+```
+
+##### 绑定一个 cancelAction
+
 
 
 
