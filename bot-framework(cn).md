@@ -216,7 +216,7 @@ bot.dialog('greetings', [
 
 ​	使用这个基本的结构，你可以添加更多的提示提示和反馈来模拟你的机器人的会话流程。
 
-#### **提示结构**
+#### 提示结果
 
 ​	内置提示由对话执行，然后在`results.response`里返回用户的回复。在`results.response.entity`里，回复会返回成JSON对象。任何种类的对话句柄都可以接收提示返回的结果。当机器人接收了回复，它可以处理它或者通过`session.endDialogWithResult`方法将其传会给上层对话。
 
@@ -1142,6 +1142,88 @@ bot.dialog('help', function (session, args, next) {
 
 ​	在这个例子中，`triggerAction` 被添加到了 `help` 对话框自己上。`onSelectAction` 选项允许你开始这个对话框而不用清空对话框栈。这样允许你可以处理类似 "help", "about", "support" 这一类的全局请求。注意 `onSelectAction` 选项明确地调用了 `session.beginDialog` 方法来开始被触发的对话框。`args.action` 参数提供了被触发对话框的ID。不要在这个方法里手动编辑对话框ID，否则你将会得到一个运行报错。如果你想在 `orderDinner` 任务里触发一个跟上下文有关的帮助消息，你可以考虑给 `orderDinner` 对话框添加 `beginDialogAction` 来替代。
 
+##### 绑定一个 customAction
+
+​	和其他类型的动作不同，`customAction` 没有默认的动作定义。动作执行什么操作是由你自己决定的。使用 `customAction` 的好处是你可以操作用户的请求而不用去草种对话框栈。当一个 `customAction` 被触发，`onSelecetAction` 选项可以被执行，而不用将新的对话框压入栈中。当这个动作完成，控制权会交回栈顶部的对话框，以便机器人继续运行。
+
+​	你可以使用一个 `ustomAction` 来提供通用并且快速的请求，比如说：“现在外面的温度是多少？”，“巴黎现在的时间是多少？”，“提醒我今天下午5点买牛奶”等等。机器人可以执行这些通用的动作而不用操纵对话框栈。
+
+​	`customAction` 另外一个不同的地方，它是绑定在机器人上而不是对话上的。
+
+​	下面的代码例子展示了如何将一个 `customAction` 绑定在 `bot` 来监听请求，并设置一个提醒。
+
+```javascript
+bot.customAction({
+    matches: /remind|reminder/gi,
+    onSelectAction: (session, args, next) => {
+        // Set reminder...
+        session.send("Reminder is set.");
+    }
+})
+```
+
+##### 绑定一个 `beginDialogAction` 
+
+​	绑定一个 `beginDialogAction` 到一个对话框上，会将这个动作注册在对话框上。当这个方法被触发时，会开始另外一个对话框。这个动作的行为和调用 `beginDialog` 方法类似。新的对话框会被压入栈顶，所以它不会自动结束当前任务。当前任务会在新的对话框结束后继续。
+
+​	下面的代码片段展示了如何将一个 `beginDialogAction` 绑定在一个对话框上
+
+```javascript
+// Order dinner.
+bot.dialog('orderDinner', [
+    //...waterfall steps...
+])
+// Once triggered, will start the 'showDinnerCart' dialog.
+// Then, the waterfall will resumed from the step that was interrupted.
+.beginDialogAction('showCartAction', 'showDinnerCart', {
+    matches: /^show cart$/i
+});
+
+// Show dinner items in cart
+bot.dialog('showDinnerCart', function(session){
+    for(var i = 1; i < session.conversationData.orders.length; i++){
+        session.send(`You ordered: ${session.conversationData.orders[i].Description} for a total of $${session.conversationData.orders[i].Price}.`);
+    }
+
+    // End this dialog
+    session.endDialog(`Your total is: $${session.conversationData.orders[0].Price}`);
+});
+```
+
+​	当你需要给新的对话框传递参数的时候，你可以给动作添加 `dialogArgs` 选项。
+
+​	你可以修改上面的例子，通过 `dialogArgs` 给它传入参数。
+
+```javascript
+// Order dinner.
+bot.dialog('orderDinner', [
+    //...waterfall steps...
+])
+// Once triggered, will start the 'showDinnerCart' dialog.
+// Then, the waterfall will resumed from the step that was interrupted.
+.beginDialogAction('showCartAction', 'showDinnerCart', {
+    matches: /^show cart$/i,
+    dialogArgs: {
+        showTotal: true;
+    }
+});
+
+// Show dinner items in cart with the option to show total or not.
+bot.dialog('showDinnerCart', function(session, args){
+    for(var i = 1; i < session.conversationData.orders.length; i++){
+        session.send(`You ordered: ${session.conversationData.orders[i].Description} for a total of $${session.conversationData.orders[i].Price}.`);
+    }
+
+    if(args && args.showTotal){
+        // End this dialog with total.
+        session.endDialog(`Your total is: $${session.conversationData.orders[0].Price}`);
+    }
+    else{
+        session.endDialog(); // Ends without a message.
+    }
+});
+```
+
 ##### 绑定一个 reloadAction
 
 ​	绑定一个 `reloadAction` 到一个对话框将会将它注册到对话框。将这个动作绑定到对话框，在触发的时候会导致对话框重新开始。触发这个动作和调用 `replaceDialog` 方法类似。这在实现类似用户输入 "start over" 或者创建一个循环的逻辑的时候非常有用。
@@ -1184,6 +1266,63 @@ bot.dialog('orderDinner', [
 ```
 
 ##### 绑定一个 cancelAction
+
+​	`cancelAction` 的绑定会注册在对话框上。一旦被触发，这个动作会立即中断对话框。当对话中断时，父对话将会恢复，并有一个恢复码表明对话被退出。这个动作允许你处理一些类似 “nevermind” 或者 “cancel”一类的语句。如果你需要编写自己的退出对话框，请参考 **退出对话框** 章节。关于返回码的更多信息，请看 **提示结果** 一节。
+
+​	下面的戴安展示了如何将 `cancelAction` 绑定到对话
+
+```javascript
+// Order dinner.
+bot.dialog('orderDinner', [
+    //...waterfall steps...
+])
+//Once triggered, will end the dialog.
+.cancelAction('cancelAction', 'Ok, cancel order.', {
+    matches: /^nevermind$|^cancel$|^cancel.*order/i
+});
+```
+
+##### 绑定一个 endConversationAction
+
+​	`endConversationAction` 的绑定会注册在对话框上。当触发的时候，这个动作会结束用户的会话。触发这个动作和调用 `endConversation` 方法类似。一旦会话结束，SDK会清除对话框栈和所有持久状态数据。关于持久状态数据的更多信息，请看 **管理状态数据** 章节。
+
+​	下面的代码片段展示了如何将一个 `endConversationDialog` 绑定在对话框上
+
+```javascript
+// Order dinner.
+bot.dialog('orderDinner', [
+    //...waterfall steps...
+])
+// Once triggered, will end the conversation.
+.endConversationAction('endConversationAction', 'Ok, goodbye!', {
+    matches: /^goodbye$/i
+});
+```
+
+#### 确认中断
+
+​	大多数动作都会中断正常的会话流程。其中大多数是会破坏会话流程的，所以应当更小心的进行处理。举个例子，`triggerAction`, `cancelAction` 或者 `endConversationAction` 将会清空对话框栈。如果用户错误地触发了这些动作，他们必须重新开始任务。确认用户真的想要触发这些动作，你可以给这些动作添加一个 `confirmPrompt` 选项。`confirmPrompt` 将会询问用户他们是否真的想要退出或者结束当前的任务。它允许用户可以改变主意并且继续任务流程。
+
+​	下面的代码片段展示了添加有`confirmPrompt` 的 `cancelAction` ，让用户在退出流程之前可以进行确认。
+
+```javascript
+// Order dinner.
+bot.dialog('orderDinner', [
+    //...waterfall steps...
+])
+// Confirm before triggering the action.
+// Once triggered, will end the dialog. 
+.cancelAction('cancelAction', 'Ok, cancel order.', {
+    matches: /^nevermind$|^cancel$|^cancel.*order/i
+    confirmPrompt: "Are you sure?"
+});
+```
+
+ 	当这个动作被触发时，它会问用户 “Are you sure?” ，用户必须回答 “Yes” 来进行这个动作，或者回答 “No” 来退出这个动作并继续之前的流程。
+
+ #### 下一步
+
+​	**Actions** 允许你预料用户的请求，并且让机器人优雅地处理这些请求。这些动作的大多数会破坏当前的会话流程。如果你想要用户可切换和恢复会话流程，你需要在用户切换之前保存用户的状态。接下来让我们详细了解如何保存用户的状态以及管理状态数据。
 
 
 
