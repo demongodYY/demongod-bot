@@ -2,7 +2,56 @@
 
 ## 关键概念
 
-..............
+### Node.js 版机器人 SDK 的关键概念
+
+​	这一节概述了Node.js版机器人SDK的关键概念。关于机器人框架的概述，请看 **机器人框架概述**
+
+#### 连接器
+
+​	机器人框架连接器是一个连接你的机器人到各类频道的服务，比如说 Skype, Facebook, Slack, SMS 等。连接器中继频道与机器人之间的消息，来使用户方便的于机器人交流。你的机器人逻辑托管在一个Web服务商，通过连接器的服务来接收用户的消息，而你的机器人的回复是通过 HTTP POST 发送给连接器的。
+
+​	Node.js版的SDK提供了 `UniversalBot` 和 `ChatConnector` 类来配置机器人，使其通过机器人框架连接器来收发消息。`UniversalBot` 类形成了你的机器人的大脑。它主管你的机器人对用户所有的会话。`ChatConnector` 类连接你的机器人到机器人框架连接器服务。关于演示这些类的例子，请看  [Create a bot with the Bot Builder SDK for Node.js](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-quickstart)
+
+​	连接器也规范机器人给频道发送的消息，这样你就可以在各类平台上开发你的机器人。规范消息包括将机器人框架的模式转换成频道的模式。在频道不支持框架所有的模式的情况下，连接器会试图将消息装换成频道支持的格式。举个例子，如果机器人发送了一个包括拥有动作按钮的卡片给 SMS 频道，连接器可能会将这个卡片渲染成一个图片与包括动作连接的文本消息。**频道检测器** 是一个告诉你连接器在不同频道上如何渲染消息的 Web 工具。
+
+​	`ChatConnector` 需要在你的机器人中设置一个 API 端点。在 Node.js SDK 中，这通常是由 安装 `restify` Node 模块来完成的。机器人也可以通过 `ConsoleConnector` 来构建命令行模式，而不需要 API 端点。
+
+#### 消息
+
+​	消息可以由文字，语音，附件，富文本卡片或者支持的操作来组成。你可以使用 `session.send` 方法来发送用于响应用户的消息。你的机器人可以会根据用户的消息，多次调用 `send` 方法来响应。关于这个的例子，请看 [Respond to user messages](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-use-default-message-handler).
+
+​	关于发送包括交互式按钮的富文本卡片的例子，请看 [Add rich cards to messages](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-send-rich-cards)。关于如何收发附件的例子，请看  [Send attachments](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-send-receive-attachments)  。关于如何发送语音，请看 [Add speech to messages](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-text-to-speech). 关于如何发送能被支持的动作，请看 [Send suggested actions](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-send-suggested-actions).
+
+#### 对话框
+
+​	对话框帮助你在你的机器人中组织会话逻辑，同时它也是**设计会话流程** 的基础。关于对话框的介绍，请看[Manage a conversation with dialogs](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-dialog-manage-conversation).
+
+#### 动作
+
+​	你设计的机器人会需要处理中断，比如说在对话中随时会发出的退出或者帮助请求。Node.js机器人SDK提供了全局消息处理用来触发类似退出或者调用其他对话框的动作。请看   [Handle user actions](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-dialog-actions)  里的关于如何使用  [triggerAction](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.dialog.html#triggeraction) 的例子。
+
+#### 识别器
+
+​	当用户问你的机器人一些问题，比如说 "help" 或者 "find news" ， 你的机器人需要懂得用户正在问什么，然后进行适当的动作。你可以设计你的机器人识别用户输入的意图，并且关联对应的动作。
+
+​	你可以使用 Bot Builder SDK 提供的内置正则表达式，或者使用类似 LUIS API 这类的外部服务，又或者实现一个自定义的识别器来判断用户的意图。关于如何在你的机器人中添加识别器，并且用他们来触发动作的例子，请看 [Recognize user intent](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-recognize-intent-messages) 。
+
+#### 存储状态
+
+​	好的机器人设计的关键是跟踪会话的上下文，这样你的机器人可以记住类似用户最后一个问题的事情。使用Bot Builder SDK构建的机器人被设计为无状态的，因此可以轻松地将它们扩展，以便于在多个计算节点上运行。机器人框架提供了一个存储系统存储机器人的数据，所以机器人的网页服务可以被扩展。因此，你通常应当避免使用全局变量或者闭包来存储状态，这样会在你对机器人进行扩展时产生问题。用于替代的，你的机器人的 `session` 下的属性来存储相关数据到你的用户或者会话：
+
+- **userData** 存储了用户在所有会话的全局信息。
+- **conversationData** 存储一个会话的全局信息。这个数据在会话中对每个人可见，所以讲数据存储到这个属性时需要谨慎。它默认是开启的，你可以使用  [persistConversationData](https://docs.botframework.com/en-us/node/builder/chat-reference/interfaces/_botbuilder_d_.iuniversalbotsettings.html#persistconversationdata) 操作来关闭它
+- **privateConversationData** 存储了一个对话的全局信息，但是它是针对当前用户的私有数据。这个数据包括了所有对话框，所以它在会话结束时存储临时状态非常有用。
+- **dialogData** 保存单个对话框实例的信息。这个属性在对话框瀑布流的步骤之间存储临时信息是非常必需的。
+
+​	关于如何使用这些属性存储或者取用数据，请看 [Manage state data](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-state).
+
+#### 自然语言理解
+
+​	Bot Builder 让你使用 LUIS 中的 [LuisRecognizer](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.luisrecognizer)  类来在你的机器人中添加自然语言理解。你可以添加 `LuisRecoGnizer` 实例，引用你的发布语言的模型，用于响应用户的话语。请看下面 LUIS 动作的10分钟教程：
+
+- [Microsoft LUIS Tutorial](https://vimeo.com/145499419) (视频)
 
 ## 对话
 
@@ -1393,6 +1442,10 @@ bot.dialog('orderDinner', [
  #### 下一步
 
 ​	**Actions** 允许你预料用户的请求，并且让机器人优雅地处理这些请求。这些动作的大多数会破坏当前的会话流程。如果你想要用户可切换和恢复会话流程，你需要在用户切换之前保存用户的状态。接下来让我们详细了解如何保存用户的状态以及管理状态数据。
+
+## 消息
+
+### 创建消息
 
 
 
