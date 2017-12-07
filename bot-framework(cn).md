@@ -45,7 +45,7 @@
 - **privateConversationData** 存储了一个对话的全局信息，但是它是针对当前用户的私有数据。这个数据包括了所有对话框，所以它在会话结束时存储临时状态非常有用。
 - **dialogData** 保存单个对话框实例的信息。这个属性在对话框瀑布流的步骤之间存储临时信息是非常必需的。
 
-​	关于如何使用这些属性存储或者取用数据，请看 [Manage state data](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-state).
+  ​关于如何使用这些属性存储或者取用数据，请看 [Manage state data](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-state).
 
 #### 自然语言理解
 
@@ -73,7 +73,7 @@
 - 它可以遵循一个瀑布流模型，用来指导用户通过一系列的步骤或者提示用户回答一系列问题
 - 它可以使用动作来监听一些关键词或短语来触发不同的对话框
 
-​	你可以认为一个会话是对话框的父。像这样，一个会话包含一个对话框栈并维护自己的一组状态数据； 也就是`conversationData` 和 `priateConversationData` 。另一方面，一个对话框维护着 `dialogData` 。关于状态信息的更多细节，请看 *管理状态数据*  一章。
+  ​你可以认为一个会话是对话框的父。像这样，一个会话包含一个对话框栈并维护自己的一组状态数据； 也就是`conversationData` 和 `priateConversationData` 。另一方面，一个对话框维护着 `dialogData` 。关于状态信息的更多细节，请看 *管理状态数据*  一章。
 
 #### 对话框栈
 
@@ -1447,7 +1447,91 @@ bot.dialog('orderDinner', [
 
 ### 创建消息
 
+​	机器人与用户之间是通过消息进行沟通的。你的机器人会发送消息给用户，或接收来自用户的消息。一些消息可能是由简单的文本构成的，也有一些可能包含类似语音，动作，媒体附件，富文本卡片或者频道特有的数据等更丰富的内容。
 
+​	这一章节秒速了一些通用的消息方法，你可以用它们来提高你的产品的用户体验。
+
+#### 默认消息处理
+
+​	Node.js 下的 Bot Builde SDK 附带了在 `session` 对象中内置的默认消息处理器。这个消息处理器允许你在机器人和用户之间收发文本消息。
+
+##### 发送文本消息
+
+​	用默认消息处理器发送文本消息非常简单，你只需调用 `session.send` 方法，并给其传入字符串。
+
+​	这个例子展示了你怎么给用户发一个文本问候消息：
+
+```javascript
+session.send("Good morning.");
+```
+
+​	这个例子展示了你怎么用 JavaSript 的模板字符串发送文本消息：
+
+```javascript
+var msg = `You ordered: ${order.Description} for a total of $${order.Price}.`;
+session.send(msg); //msg: "You ordered: Potato Salad for a total of $5.99."
+```
+
+##### 接收文本消息
+
+​	当用户给机器人发送消息，机器人通过 `session.message` 属性接收消息。
+
+​	这个例子展示了如何获得用户的消息：
+
+```javascript
+var userMessage = session.message.text;
+```
+
+#### 自定义一个消息
+
+​	如果你想对你的消息格式进行更多的操作，你可以创建一个自定义 `message` 对象，并且在发送给用户之前进行必要的设置。
+
+​	这个例子展示了如何创建一个自定义的 `message` 对象，并且设置了 `text` , `textFormat` 和 `tetLocale` 属性。
+
+```javascript
+var customMessage = new builder.Message(session)
+    .text("Hello!")
+    .textFormat("plain")
+    .textLocale("en-us");
+session.send(customMessage);
+```
+
+​	在你的作用域里没有 `session` 对象的情况下，你可以使用 `bot.send` 方法来发送格式化的消息给用户。
+
+​	`textFormat`  属性可以用来指定文本的格式。`textFormat` 属性可以设置成 **plain** , **markdown**, 或者 **xml** 。默认的格式是 **markdown**
+
+​	常见的文本格式的支持列表，请看  [Text formatting](https://docs.microsoft.com/en-us/bot-framework/portal-channel-inspector#text-formatting).  为了确保这些功能在目标的频道中被支持，请查看 [Channel Inspector](https://docs.microsoft.com/en-us/bot-framework/portal-channel-inspector).
+
+#### 消息属性
+
+​	`Message` 对象有一个内置的  **data**  属性，用于管理发送的消息。而其他的属性的设置是通过这个对象的不同方法来实现的。
+
+#### 消息方法
+
+​	消息属性是通过对象的方法来设置和检索的。下面的表提供了你可以调用的方法的列表，用于设置/获取不同的消息属性。
+
+| Method                                   | Description                              |
+| ---------------------------------------- | ---------------------------------------- |
+| [`addAttachment(attachment:AttachmentType)`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#addattachment) | Adds an attachment to a message          |
+| [`addEntity(obj:Object)`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#addentity) | Adds an entity to the message.           |
+| [`address(adr:IAddress)`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#address) | Address routing information for the message. To send user a proactive message, save the message's address in the userData bag. |
+| [`attachmentLayout(style:string)`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#attachmentlayout) | Hint for how clients should layout multiple attachments. The default value is 'list'. |
+| [`attachments(list:AttachmentType)`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#attachments) | A list of cards or images to send to the user. |
+| [`compose(prompts:string[\], ...args:any[])`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#compose) | Composes a complex and randomized reply to the user. |
+| [`entities(list:Object[\])`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#entities) | Structured objects passed to the bot or user. |
+| [`inputHint(hint:string)`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#inputhint) | Hint sent to user letting them know if the bot is expecting further input or not. The built-in prompts will automatically populate this value for outgoing messages. |
+| [`localTimeStamp((optional)time:string)`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#localtimestamp) | Local time when message was sent (set by client or bot, Ex: 2016-09-23T13:07:49.4714686-07:00.) |
+| [`originalEvent(event:any)`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#originalevent) | Message in original/native format of the channel for incoming messages. |
+| [`sourceEvent(map:ISourceEventMap)`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#sourceevent) | For outgoing messages can be used to pass source specific event data like custom attachments. |
+| [`speak(ssml:TextType, ...args:any[\])`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#speak) | Sets the speak field of the message as *Speech Synthesis Markup Language (SSML)*. This will be spoken to the user on supported devices. |
+| [`suggestedActions(suggestions:ISuggestedActions`|`IIsSuggestedActions)`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#suggestedactions) | Optional suggested actions to send to the user. Suggested actions will be displayed only on the channels that support suggested actions. |
+| [`summary(text:TextType, ...argus:any[\])`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#summary) | Text to be displayed as fall-back and as short description of the message content in (e.g.: List of recent conversations.) |
+| [`text(text:TextType, ...args:any[\])`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#text) | Sets the message text.                   |
+| [`textFormat(style:string)`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#textformat) | Set the text format. Default format is **markdown**. |
+| [`textLocale(locale:string)`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#textlocale) | Set the target language of the message.  |
+| [`toMessage()`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#tomessage) | Gets the JSON for the message.           |
+| [`composePrompt(session:Session, prompts:string[\], args?:any[])`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#composeprompt-1) | Combines an array of prompts into a single localized prompt and then optionally fills the prompts template slots with the passed in arguments. |
+| [`randomPrompt(prompts:TextType)`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#randomprompt) | Gets a random prompt from the array of **prompts*that is passed in. |
 
 
 
