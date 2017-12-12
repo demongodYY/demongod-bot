@@ -1524,7 +1524,7 @@ session.send(customMessage);
 | [`originalEvent(event:any)`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#originalevent) | Message in original/native format of the channel for incoming messages. |
 | [`sourceEvent(map:ISourceEventMap)`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#sourceevent) | For outgoing messages can be used to pass source specific event data like custom attachments. |
 | [`speak(ssml:TextType, ...args:any[\])`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#speak) | Sets the speak field of the message as *Speech Synthesis Markup Language (SSML)*. This will be spoken to the user on supported devices. |
-| [`suggestedActions(suggestions:ISuggestedActions`|`IIsSuggestedActions)`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#suggestedactions) | Optional suggested actions to send to the user. Suggested actions will be displayed only on the channels that support suggested actions. |
+| [`suggestedActions(suggestions:ISuggestedActions` | `IIsSuggestedActions)`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#suggestedactions) |
 | [`summary(text:TextType, ...argus:any[\])`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#summary) | Text to be displayed as fall-back and as short description of the message content in (e.g.: List of recent conversations.) |
 | [`text(text:TextType, ...args:any[\])`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#text) | Sets the message text.                   |
 | [`textFormat(style:string)`](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message.html#textformat) | Set the text format. Default format is **markdown**. |
@@ -1535,8 +1535,395 @@ session.send(customMessage);
 
 
 
+### 发送和接收附件
+
+​	用户和机器人之间的消息交互可以包括类似图片，声音，视频，文件等形式的附件。每个频道可以发送的附件类型都不一样，但下面这些事一些基本类型：
+
+- **多媒体和文件：** 你可以将 **contentType** 设置为 `IAttachment` 对象的 MIME 类型，然后将链接传递给 **contentUrl**  中的文件来发送文件，比如图像，音频和视频。
+- **卡片：** 你可以将 **contentType** 设置成想要的卡片类型，然后将 JSON 数据传递给卡片，用于给用户发送一个可见的卡片。如果你用了类似 `HeroCard` 一类的卡片构建类，附件将会自动的填充。详细例子请看 [send a rich card](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-send-rich-cards) 。
+
+#### 添加多媒体附件
+
+​	当你想要在给用户发送的消息里包含类似图片的附件时，消息的对象一般是一个 `Imessage` 类的实例。使用 `session.send()` 方法用来发送 JSON 对象格式的消息
+
+#### 例子
+
+​	下面的的例子检查用户是否发送了一个附件，如果有附件，将会回复附件中包含的任意图片。你可以在 Bot Framework Emulator 中测试给机器人发送图片。
+
+```javascript
+// Create your bot with a function to receive messages from the user
+var bot = new builder.UniversalBot(connector, function (session) {
+    var msg = session.message;
+    if (msg.attachments && msg.attachments.length > 0) {
+     // Echo back attachment
+     var attachment = msg.attachments[0];
+        session.send({
+            text: "You sent:",
+            attachments: [
+                {
+                    contentType: attachment.contentType,
+                    contentUrl: attachment.contentUrl,
+                    name: attachment.name
+                }
+            ]
+        });
+    } else {
+        // Echo back users text
+        session.send("You said: %s", session.message.text);
+    }
+});
+```
+
+#### 更多资源
+
+- [Preview features with the Channel Inspector](https://docs.microsoft.com/en-us/bot-framework/portal-channel-inspector)
+- [IMessage](http://docs.botframework.com/en-us/node/builder/chat-reference/interfaces/_botbuilder_d_.imessage)
+- [Send a rich card](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-send-rich-cards)
+- [session.send](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.session.html#send) 
 
 
 
+### 发送主动消息
 
+​	通常，机器人发送的每个消息，都是跟用户的输入有关系。在某些情况下，机器人可能需要给用户发送一些跟当前会话没有直接关系的消息。这些类型的消息被叫做 **主动消息**。
 
+​	主动消息在很多场景下会很有用。如果机器人设置了一个计时器或事件提醒，它需要在时间到达的时候通知用户。或者说，如果机器人收到一个系统外部的通知，它可能需要立即和用户交流这个信息。举个例子，如果用户之前要求机器人监控一个产品的价格变化，机器人会在它收到这个产品降价20%的消息的时候通知用户。又或者，如果机器人需要在一些时间来回复用户的问题，它会在延迟之后通知用户，并同时继续会话。当机器人完成了这个问题的回复，它会将这个信息推送给用户。
+
+​	当你需要在你的机器人中实现主动消息时：
+
+> ​	不要发送在短时间内多次发送主动消息。一些频道强制限制了机器人给用户发送消息的频率，当你这么做时，会违反这些规定。
+>
+> ​	不要给先前没有与机器人交互过的用户发送主动消息，或者通过 e-mail、 短信的等方式使得机器人与用户联系。
+
+​	考虑以下的场景：
+
+![how users talk](https://docs.microsoft.com/en-us/bot-framework/media/designing-bots/capabilities/proactive1.png)
+
+​	在这个例子中，用户在之前要求机器人监控拉斯维加斯酒店的价格。机器人在后台进行这个监视任务，这个任务一直运行了很多天。在当前这个会话中，用户在预定伦敦的旅游的时候，后台的任务触发了一个关于拉斯维加斯酒店打折的通知消息。机器人在当前会话中插入了这个消息，使得用户非常的困惑。
+
+​	在这种情况下机器人该如何处理呢？
+
+- 在当前的旅行预定会话结束后，再发送这个通知。这个方法不会有什么破坏性，但是延迟的消息，可能使用户错过拉斯维加斯酒店的低价。
+
+- 退出当前的旅行预定会话，然后立即将消息发送给用户。这个方法会及时的发送消息，但是会强制使用户重新开始他们的旅行预定。
+
+- 打断当前的预定，在用户回复之前，标明会话主题变为了拉斯维加斯的酒店，之后再恢复到旅行预定中断的地方。这个方法看起来是最好的选择，但是它对用户和开发者都会变得复杂。
+
+  通常情况下，你的机器人会采用一些 **特别广告主动消息** ，或者 **对话框主动消息** 来处理这种情况。
+
+#### 主动消息的种类
+
+​	一个 **特别广告主动消息** 是主动消息种类里最简单的一种。机器人会简单地在会话中触发的地方弹出一个消息，而不管用户是否正与机器人进行会话，并且也不会试图去改变这个会话。
+
+​	**对话框主动消息** 要比 **特别广告主动消息** 要复杂的多。在会话中弹出这个消息之前，机器人必须识别现有会话的上下文，以便决定在这个消息结束后如何回到对话。
+
+​	举个例子，考虑一个机器人需要在一个给定的时间点开始一项调查。当这个时间到达时，机器人停下和用户现有的会话，将用户重定向到 `SurveyDialog` 。`SurveyDialog` 将会被压入对话框栈顶，并且控制会话。当用户完成了 `SurveyDiaog` 要求的任务，`SurveyDialog` 关闭，并重新将控制权交给之前的对话框，这样用户就可以继续这个会话。
+
+​	一个对话框主动消息并不仅仅是简单的通知。在发送通知的同事，机器人会改变现有会话的主题。它必须决定之后是否会恢复会话，或者干脆重置对话框栈来放弃整个会话。
+
+#### 发送一个特别广告主动消息
+
+​	下面的代码例子展示了如何用 SDK 来发送一个特别广告主动消息。
+
+​	要给用户发送特别广告消息，机器人首先必须收集并存储用户当前会话的信息。消息的 `address` 属性包括了机器人将要给用户发送消息的所有信息。
+
+```javascript
+bot.dialog('adhocDialog', function(session, args) {
+    var savedAddress = session.message.address;
+
+    // (Save this information somewhere that it can be accessed later, such as in a database, or session.userData)
+    session.userData.savedAddress = savedAddress;
+
+    var message = 'Hello user, good to meet you! I now know your address and can send you notifications in the future.';
+    session.send(message);
+})
+```
+
+ 	在机器人收集了用户的信息之后，它可以在任意时间给用户发送特别广告主动消息。要这么做，它只需检索先前存储的用户数据，构建消息并发送。
+
+```javascript
+var inMemoryStorage = new builder.MemoryBotStorage();
+
+var bot = new builder.UniversalBot(connector)
+                .set('storage', inMemoryStorage); // Register in-memory storage 
+
+function sendProactiveMessage(address) {
+    var msg = new builder.Message().address(address);
+    msg.text('Hello, this is a notification');
+    msg.textLocale('en-US');
+    bot.send(msg);
+}
+```
+
+#### 发送对话框主动消息
+
+​	下面的代码例子展示了如何使用 SDK 发送对话框主动消息。你可以在 [Microsoft/BotBuilder-Samples/Node/core-proactiveMessages/startNewDialog](https://github.com/Microsoft/BotBuilder-Samples/tree/master/Node/core-proactiveMessages/startNewDialog) 目录下找到这个的完整例子。
+
+​	要给用户发送对话框消息，机器人首先得手机并存储当前会话的信息。 `session.message.address` 对象包括了这些信息，以便于机器人给用户发送对话框主动消息。
+
+```javascript
+// proactiveDialog dialog
+bot.dialog('proactiveDialog', function (session, args) {
+
+    savedAddress = session.message.address;
+
+    var message = 'Hey there, I\'m going to interrupt our conversation and start a survey in five seconds...';
+    session.send(message);
+
+    message = `You can also make me send a message by accessing: http://localhost:${server.address().port}/api/CustomWebApi`;
+    session.send(message);
+
+    setTimeout(() => {
+        startProactiveDialog(savedAddress);
+    }, 5000);
+});
+```
+
+​	当到了发送消息的时候，机器人会创建一个新的对话框，并将它压入栈顶。新的对话框会接管会话，提供推送消息，在关闭后，栈中原先的对话框会接管会话。
+
+```javascript
+// initiate a dialog proactively 
+function startProactiveDialog(address) {
+    bot.beginDialog(address, "*:survey");
+}
+```
+
+​	`survey` 对话框接管了会话，知道它完成。然后，它会关闭（调用 `session.endDialog()` ） ，并返回之前的对话框
+
+```javascript
+// handle the proactive initiated dialog
+bot.dialog('survey', function (session, args, next) {
+  if (session.message.text === "done") {
+    session.send("Great, back to the original conversation");
+    session.endDialog();
+  } else {
+    session.send('Hello, I\'m the survey dialog. I\'m interrupting your conversation to ask you a question. Type "done" to resume');
+  }
+});
+```
+
+#### 代码示例
+
+​	完整的使用 SDK 发送主动消息的示例，请在 GitHub 上查看  [Proactive Messages sample](https://github.com/Microsoft/BotBuilder-Samples/tree/master/Node/core-proactiveMessages) 。其中，  [simpleSendMessage](https://github.com/Microsoft/BotBuilder-Samples/tree/master/Node/core-proactiveMessages/simpleSendMessage) 展示了如何发送特别广告主动消息，[startNewDialog](https://github.com/Microsoft/BotBuilder-Samples/tree/master/Node/core-proactiveMessages/startNewDialog) 展示了如何发送对话框主动消息。
+
+#### 更多资源
+
+- [Designing conversation flow](https://docs.microsoft.com/en-us/bot-framework/bot-design-conversation-flow) 
+
+### 给消息添加富文本卡片附件
+
+​	一些类似 Skype & Facebook 的频道，支持发送拥有可以让用户点击交互按钮的富文本卡片。SDK 提供了一些消息和卡片构建类，可以用于创建和发送卡片。Bot Framework Connector Service 将会在频道中通过本地渲染这些卡片，以便于支持跨品台的交流。如果平台像短信一般不支持卡片，Bot Framework 将会尽可能合理的渲染成其他的样式。
+
+#### 富文本卡片的种类
+
+​	Bot Framework 目前支持8种卡片：
+
+| Card type                                | Description                              |
+| ---------------------------------------- | ---------------------------------------- |
+| [Adaptive Card](https://docs.microsoft.com/en-us/adaptive-cards/get-started/bots) | A customizable card that can contain any combination of text, speech, images, buttons, and input fields. See [per-channel support](https://docs.microsoft.com/en-us/adaptive-cards/get-started/bots#channel-status). |
+| [Animation Card](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.animationcard.html) | A card that can play animated GIFs or short videos. |
+| [Audio Card](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.audiocard.html) | A card that can play an audio file.      |
+| [Hero Card](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.herocard.html) | A card that typically contains a single large image, one or more buttons, and text. |
+| [Thumbnail Card](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.thumbnailcard.html) | A card that typically contains a single thumbnail image, one or more buttons, and text. |
+| [Receipt Card](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.receiptcard.html) | A card that enables a bot to provide a receipt to the user. It typically contains the list of items to include on the receipt, tax and total information, and other text. |
+| [Signin Card](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.signincard.html) | A card that enables a bot to request that a user sign-in. It typically contains text and one or more buttons that the user can click to initiate the sign-in process. |
+| [Video Card](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.videocard.html) | A card that can play videos.             |
+
+#### 通过 Hero 卡片发送一个轮播
+
+​	下面的例子展示了一个虚拟的 T-shirt 公司，如何在用户说 “show shirts”的时候回复一组轮播卡片。
+
+```javascript
+// Create your bot with a function to receive messages from the user
+// Create bot and default message handler
+var bot = new builder.UniversalBot(connector, function (session) {
+    session.send("Hi... We sell shirts. Say 'show shirts' to see our products.");
+});
+
+// Add dialog to return list of shirts available
+bot.dialog('showShirts', function (session) {
+    var msg = new builder.Message(session);
+    msg.attachmentLayout(builder.AttachmentLayout.carousel)
+    msg.attachments([
+        new builder.HeroCard(session)
+            .title("Classic White T-Shirt")
+            .subtitle("100% Soft and Luxurious Cotton")
+            .text("Price is $25 and carried in sizes (S, M, L, and XL)")
+            .images([builder.CardImage.create(session, 'http://petersapparel.parseapp.com/img/whiteshirt.png')])
+            .buttons([
+                builder.CardAction.imBack(session, "buy classic white t-shirt", "Buy")
+            ]),
+        new builder.HeroCard(session)
+            .title("Classic Gray T-Shirt")
+            .subtitle("100% Soft and Luxurious Cotton")
+            .text("Price is $25 and carried in sizes (S, M, L, and XL)")
+            .images([builder.CardImage.create(session, 'http://petersapparel.parseapp.com/img/grayshirt.png')])
+            .buttons([
+                builder.CardAction.imBack(session, "buy classic gray t-shirt", "Buy")
+            ])
+    ]);
+    session.send(msg).endDialog();
+}).triggerAction({ matches: /^(show|list)/i });
+```
+
+​	这个例子使用了 `Message` 类来构建轮播。
+
+​	这组录播又一组包含了图片文字和购买按钮的 `HeroCard` 类组成。
+
+​	点击 **购买** 按钮会发送一个消息，所以我们需要添加第二个对话框来捕获按钮点击事件。
+
+#### 处理按钮输入
+
+​	`buyButtonClick` 对话框将会在收到 "buy" 或者 “add” 后面跟着类似 "shirt" 这样的消息之后触发。对话框使用一对正则表达式来寻找用户想要的 shirt  的颜色和尺寸。这样更加灵活，使得你可以同时支持按钮点击或者来自用户的自然语言输入，比如说 “please add a large gray shirt to my cart”。如果颜色是有效的，但是尺码不对，机器人会提示用户选择这件准备添加到购物车的商品的尺码。一旦机器人有了需要的所有信息，它会将商品添加到购物车，并用 `session.userData` 存储数据，之后向用户发出确认消息。
+
+```javascript
+// Add dialog to handle 'Buy' button click
+bot.dialog('buyButtonClick', [
+    function (session, args, next) {
+        // Get color and optional size from users utterance
+        var utterance = args.intent.matched[0];
+        var color = /(white|gray)/i.exec(utterance);
+        var size = /\b(Extra Large|Large|Medium|Small)\b/i.exec(utterance);
+        if (color) {
+            // Initialize cart item
+            var item = session.dialogData.item = { 
+                product: "classic " + color[0].toLowerCase() + " t-shirt",
+                size: size ? size[0].toLowerCase() : null,
+                price: 25.0,
+                qty: 1
+            };
+            if (!item.size) {
+                // Prompt for size
+                builder.Prompts.choice(session, "What size would you like?", "Small|Medium|Large|Extra Large");
+            } else {
+                //Skip to next waterfall step
+                next();
+            }
+        } else {
+            // Invalid product
+            session.send("I'm sorry... That product wasn't found.").endDialog();
+        }   
+    },
+    function (session, results) {
+        // Save size if prompted
+        var item = session.dialogData.item;
+        if (results.response) {
+            item.size = results.response.entity.toLowerCase();
+        }
+
+        // Add to cart
+        if (!session.userData.cart) {
+            session.userData.cart = [];
+        }
+        session.userData.cart.push(item);
+
+        // Send confirmation to users
+        session.send("A '%(size)s %(product)s' has been added to your cart.", item).endDialog();
+    }
+]).triggerAction({ matches: /(buy|add)\s.*shirt/i });
+```
+
+#### 添加一个图片下载延迟消息
+
+​	一些频道趋向于在给用户展示消息之前下载图片，因此，如果你在发送了一个带图片的消息之后接着又发送了一个没有图片的消息，有可能会造成顺序的错误。为了尽可能减少这种可能性，你可以尝试让你的图片来自内容交付网络（CDNs），并且避免使用过大的图片。在极端的情况下，你甚至可能需要在消息之间插入1-2秒的延迟。你可以调用 session.sendTyping() 方法来发送一个输入指示符，使用户体验更好。
+
+​	Bot Framework 实现了一个批处理，来防止消息显示顺序的混乱。当你的机器人发出多条回复给用户的时候，每个消息将会被自动份组成一个批处理发送给用户，以保证消息的顺序。这个自动的批处理默认情况下在每次调用 `session.send()` 与 send() 方法之间添加一个250ms的延迟。
+
+​	消息的批处理延迟是可以设置的。禁用 SDK 的自动批处理逻辑，将默认延迟设置成更大的数值，然后在批处理完成之后，通过回调函数手动调用 sendBatch() 。
+
+#### 发送一个 Adaptive 卡片 
+
+​	Adaptive 卡片 可以包含任何内容，比如说文字，语音，图片，按钮或者输入框。Adaptive 卡片在 [Adaptive Cards](http://adaptivecards.io/) 类中使用 JSON 格式来创建，这样你可以完全控制卡片的内容和格式。
+
+​	使用 Node.js 创建一个 Adaptive 卡片，可以通过 [Adaptive Cards](http://adaptivecards.io/) 网站来了解 Adaptive 卡片的格式，解析 Adaptive 卡片的元素，并且查看用来创建卡片内容和结构的 JSON 例子。更多的，你可以使用交互式平台来设计 Adaptive 卡片。
+
+​	这个代码例子展示了如何创建一个包含 Adaptive 卡片的例子，来制作一个日历提醒器：
+
+```javascript
+var msg = new builder.Message(session)
+    .addAttachment({
+        contentType: "application/vnd.microsoft.card.adaptive",
+        content: {
+            type: "AdaptiveCard",
+            speak: "<s>Your  meeting about \"Adaptive Card design session\"<break strength='weak'/> is starting at 12:30pm</s><s>Do you want to snooze <break strength='weak'/> or do you want to send a late notification to the attendees?</s>",
+               body: [
+                    {
+                        "type": "TextBlock",
+                        "text": "Adaptive Card design session",
+                        "size": "large",
+                        "weight": "bolder"
+                    },
+                    {
+                        "type": "TextBlock",
+                        "text": "Conf Room 112/3377 (10)"
+                    },
+                    {
+                        "type": "TextBlock",
+                        "text": "12:30 PM - 1:30 PM"
+                    },
+                    {
+                        "type": "TextBlock",
+                        "text": "Snooze for"
+                    },
+                    {
+                        "type": "Input.ChoiceSet",
+                        "id": "snooze",
+                        "style":"compact",
+                        "choices": [
+                            {
+                                "title": "5 minutes",
+                                "value": "5",
+                                "isSelected": true
+                            },
+                            {
+                                "title": "15 minutes",
+                                "value": "15"
+                            },
+                            {
+                                "title": "30 minutes",
+                                "value": "30"
+                            }
+                        ]
+                    }
+                ],
+                "actions": [
+                    {
+                        "type": "Action.Http",
+                        "method": "POST",
+                        "url": "http://foo.com",
+                        "title": "Snooze"
+                    },
+                    {
+                        "type": "Action.Http",
+                        "method": "POST",
+                        "url": "http://foo.com",
+                        "title": "I'll be late"
+                    },
+                    {
+                        "type": "Action.Http",
+                        "method": "POST",
+                        "url": "http://foo.com",
+                        "title": "Dismiss"
+                    }
+                ]
+        }
+    });
+```
+
+​	这个卡片包含了3块文字，1个输入框（选择列表），和3个按钮：
+
+![Adaptive Card calendar reminder](https://docs.microsoft.com/en-us/bot-framework/media/adaptive-card-reminder.png)
+
+#### 更多资源
+
+- [Preview features with the Channel Inspector](https://docs.microsoft.com/en-us/bot-framework/portal-channel-inspector)
+- [Adaptive Cards](http://adaptivecards.io/)
+- [AnimationCard](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.animationcard.html)
+- [AudioCard](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.audiocard.html)
+- [HeroCard](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.herocard.html)
+- [ThumbnailCard](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.thumbnailcard.html)
+- [ReceiptCard](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.receiptcard.html)
+- [SigninCard](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.signincard.html)
+- [VideoCard](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.videocard.html)
+- [Message](https://docs.botframework.com/en-us/node/builder/chat-reference/classes/_botbuilder_d_.message)
+- [How to send attachments](https://docs.microsoft.com/en-us/bot-framework/nodejs/bot-builder-nodejs-send-receive-attachments) 

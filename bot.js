@@ -4,28 +4,28 @@ const connector = new builder.ChatConnector();
 const bot = new builder.UniversalBot(connector, [
     session => {
         // session.send("hello! %s", session.message.text);
-        session.send("欢迎来到观影体验");
+        session.send("welcome");
         session.beginDialog('reservation', session.dialogData.reservation);
     },
     (session, results) => {
         session.dialogData.reservation = results.response;
-        session.send(`您好，${session.dialogData.reservation.userName}, 已成功为您预订了 ${session.dialogData.reservation.time} 的 ${session.dialogData.reservation.peopleNum}人 包间`);
+        session.send(`hello，${session.dialogData.reservation.userName}, booking ${session.dialogData.reservation.time} 的 ${session.dialogData.reservation.peopleNum}`);
     }
 ])
 
 bot.dialog('reservation', [
     (session, args) => {
         session.dialogData.reservation = args || {};
-        builder.Prompts.time(session, "您需要什么时候预定？");
+        builder.Prompts.time(session, "shen？");
     },
     (session, results) =>{
         session.dialogData.reservation.time = builder.EntityRecognizer.resolveTime([results.response]);
-        builder.Prompts.choice(session, "您需要预定几人的包间？","1|2|3|4|5|6",{listStyle: 3});
+        builder.Prompts.choice(session, "how many","1|2|3|4|5|6",{listStyle: 3});
     },
     (session, results, next) => {
         session.dialogData.reservation.peopleNum = results.response;
         if(!session.dialogData.reservation.userName){
-            builder.Prompts.text(session, "请问怎么称呼您？");
+            builder.Prompts.text(session, "how call you");
         } else{
             next();
         }
@@ -36,7 +36,6 @@ bot.dialog('reservation', [
         }
         session.endDialogWithResult({response:session.dialogData.reservation});
     }
-
 ]);
 
 
